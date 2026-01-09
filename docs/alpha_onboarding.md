@@ -1,6 +1,46 @@
 # Authensor Alpha Onboarding Kit
 
 > **New to Authensor?** Start with the [Alpha 1-Pager](partner/alpha-1-pager.md) for a quick overview.
+>
+> **Quick reference?** See the [Partner Starter Kit](partner/starter-kit.md) for curl examples and env var reference.
+>
+> **Security?** See [SECURITY.md](../SECURITY.md) for our security policy and production checklist.
+
+## TL;DR - Get Started in 2 Minutes
+
+```bash
+# 1. Clone and install
+git clone https://github.com/AUTHENSOR/AUTHENSOR-ALPHA.git && cd AUTHENSOR-ALPHA
+corepack enable && corepack pnpm install
+
+# 2. Start Postgres and control plane
+docker compose up -d postgres
+AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN=test-token corepack pnpm dev
+
+# 3. Run smoke test (in another terminal)
+AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN=test-token ./scripts/smoke_tenant.sh
+
+# You should see: "SMOKE TEST PASSED"
+```
+
+If the smoke test passes, you're ready. The smoke test creates API keys and exercises the full flow.
+
+## Operational Safety Defaults
+
+**All partner deployments should start with these safety defaults:**
+
+```bash
+# Start in sandbox mode (no real API calls)
+AUTHENSOR_SANDBOX_MODE=stub
+
+# Optionally disable execution until policies are configured
+# POST /controls with {"disable_execution": true}
+```
+
+This ensures:
+- No real API calls until you explicitly enable them
+- Time to configure policies before any execution
+- Safe exploration of workflows and receipts
 
 ---
 
@@ -11,7 +51,7 @@ Deploy your own Authensor control plane on Render (free tier works).
 ### Step 1: Deploy via Render Blueprint
 
 1. Go to [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**
-2. Connect to GitHub repo `JKEARN/Authensor`, branch `release/v0.5.0-alpha`
+2. Connect to GitHub repo `AUTHENSOR/AUTHENSOR-ALPHA`, branch `release/v1.5.0-alpha`
 3. Set the required environment variable:
    - `AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN`: Generate with `openssl rand -base64 32`
 4. Click **Apply** and wait (~3 minutes)
@@ -49,8 +89,8 @@ curl -X POST https://<your-service>.onrender.com/evaluate \
 **Option B: Node SDK Quickstart**
 ```bash
 # Clone and run the quickstart (no global pnpm needed)
-git clone https://github.com/JKEARN/Authensor.git
-cd Authensor/examples/node-quickstart
+git clone https://github.com/AUTHENSOR/AUTHENSOR-ALPHA.git
+cd AUTHENSOR-ALPHA/examples/node-quickstart
 corepack enable
 corepack pnpm install
 
@@ -95,6 +135,7 @@ npx @authensor/mcp-server
 
 | Document | Purpose |
 |----------|---------|
+| [Partner Starter Kit](partner/starter-kit.md) | Env vars, role mappings, curl cheatsheet |
 | [Alpha 1-Pager](partner/alpha-1-pager.md) | What Authensor is, what you get, expectations |
 | [Success Criteria Template](partner/success-criteria-template.md) | Track your progress and weekly syncs |
 | [Data Retention Policy](partner/data-retention-policy.md) | How we handle your data |
@@ -497,3 +538,70 @@ Operational Metrics:
   - `generated_at` timestamp
 - Scoping: headers `x-authensor-org` / `x-authensor-env` or query params `?org=&env=` are accepted. Current mode is reported as `scope.mode` (`global` when org/env columns are not stored yet).
 - Ratios & insights: response includes `ratios` (deny_rate, config_blocked_rate, claim_conflict_rate, expired_reclaim_rate, approval rates) and `insights` with `id/message/suggestions` when spikes are detected (deny_spike, config_blocked_spike, claim_conflicts_spike, expired_reclaimed_spike, approvals_stuck). Use these hints to adjust policies, env allowlists, and claim TTL.
+
+---
+
+## Common Problems & Quick Fixes
+
+### "corepack enable" fails with permission error
+```bash
+# Use without global install
+corepack pnpm install
+# (replace all "pnpm" with "corepack pnpm")
+```
+
+### Postgres connection refused
+```bash
+# Make sure postgres is running
+docker compose up -d postgres
+
+# Wait for it to be ready
+until pg_isready -h localhost -p 5432; do sleep 1; done
+
+# Check DATABASE_URL
+export DATABASE_URL="postgres://authensor:authensor_dev@localhost:5432/authensor"
+```
+
+### 401 Unauthorized on all requests
+```bash
+# Check if you have any keys created
+curl http://localhost:3000/health  # This should always work (200)
+
+# If keys exist, use auth header
+curl http://localhost:3000/whoami -H "Authorization: Bearer YOUR_TOKEN"
+
+# If no keys, you're in bootstrap mode - create first admin key
+export AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN=your-secret-token
+# Restart control plane - it will create the bootstrap admin key
+```
+
+### Claim returns 409 Conflict
+This is normal - another executor claimed first. Wait for `retryAfterSeconds` or check `claimExpiresAt`. See [Claim Contract](partner/starter-kit.md#claim-contract--error-handling) for retry strategy.
+
+### Receipt shows "Invalid receipt ID format"
+Receipt IDs must be valid UUIDs (format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). If you're getting this from an old URL, the receipt may have been created with an invalid ID.
+
+### Tests fail with "pg-mem" errors
+```bash
+# Clear test cache
+rm -rf node_modules/.cache
+corepack pnpm test
+```
+
+### "EXECUTION_DISABLED" error on claim
+The kill switch is enabled. Check controls:
+```bash
+curl http://localhost:3000/controls -H "Authorization: Bearer $ADMIN_KEY"
+# Re-enable:
+curl -X POST http://localhost:3000/controls \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"disable_execution": false}'
+```
+
+### Smoke test fails at "Finalize receipt"
+Check the claim response - you need the `claimId` from the claim response to finalize. If the claim failed (409), wait for the TTL to expire and retry.
+
+---
+
+*Last updated: 2026-01-03*
