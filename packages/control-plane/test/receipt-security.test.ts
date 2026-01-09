@@ -98,9 +98,15 @@ describe('Receipt Viewer Security', () => {
       const response = await app.request('/receipts/view', { headers: authHeaders });
 
       expect(response.status).toBe(200);
+      // Token leakage prevention
       expect(response.headers.get('Cache-Control')).toBe('no-store');
       expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
       expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
+      // CSP and hardening
+      expect(response.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
+      expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+      expect(response.headers.get('Permissions-Policy')).toContain('geolocation=()');
     });
 
     it('returns security headers on /receipts/:id/view', async () => {
@@ -123,9 +129,15 @@ describe('Receipt Viewer Security', () => {
       const response = await app.request(`/receipts/${receiptId}/view`, { headers: authHeaders });
 
       expect(response.status).toBe(200);
+      // Token leakage prevention
       expect(response.headers.get('Cache-Control')).toBe('no-store');
       expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
       expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
+      // CSP and hardening
+      expect(response.headers.get('Content-Security-Policy')).toContain("default-src 'none'");
+      expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+      expect(response.headers.get('Permissions-Policy')).toContain('geolocation=()');
     });
   });
 
@@ -231,6 +243,7 @@ describe('Receipt Viewer Security', () => {
 
     it('redacts all sensitive keys recursively', async () => {
       const sensitiveData = {
+        // Original keys
         authorization: 'auth_value',
         token: 'token_value',
         api_key: 'apikey_value',
@@ -239,6 +252,21 @@ describe('Receipt Viewer Security', () => {
         password: 'password_value',
         cookie: 'cookie_value',
         'set-cookie': 'setcookie_value',
+        // OAuth/JWT tokens
+        access_token: 'access_token_value',
+        refresh_token: 'refresh_token_value',
+        id_token: 'id_token_value',
+        jwt: 'jwt_value',
+        bearer: 'bearer_value',
+        // Keys and credentials
+        private_key: 'private_key_value',
+        key: 'key_value',
+        credentials: 'credentials_value',
+        // Session identifiers
+        session: 'session_value',
+        session_id: 'session_id_value',
+        csrf_token: 'csrf_token_value',
+        // Nested test
         nested: {
           authorization: 'nested_auth',
           deep: {
