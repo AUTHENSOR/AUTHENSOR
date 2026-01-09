@@ -1,4 +1,44 @@
-## [Unreleased]
+## [1.5.0-alpha] - 2026-01-08
+
+### Bug Fixes
+
+- **UUID validation on ID routes**: All `:id` route parameters now validate UUID format before database queries, preventing 500 errors from PostgreSQL UUID parse failures (returns 400 with "Invalid receipt ID format")
+- **Race condition in claim endpoint**: Fixed atomic claim logic to prevent parallel claim requests from both succeeding. Added `claim_id IS NULL OR claim_expires_at < now()` to UPDATE WHERE clause for true atomicity.
+- **Claim cleanup on finalize**: Receipt finalization now clears `claim_expires_at` along with `claim_id` and `claimed_at` to satisfy database constraints.
+
+### Database
+
+- **Claim invariant constraints**: Added `008_claim_constraints.sql` migration with:
+  - `claim_requires_expiry`: If `claim_id` is set, `claim_expires_at` must also be set
+  - `expiry_requires_claimed_at`: If `claim_expires_at` is set, `claimed_at` must also be set
+  - Index `idx_receipts_claimable` for efficient lookup of claimable receipts
+
+### Testing
+
+- **Regression tests**: Added comprehensive regression tests for:
+  - UUID validation on all `:id` routes (8 endpoint groups with 8 invalid UUIDs each)
+  - Claim race condition (20 parallel claim requests, exactly 1 success)
+  - Claim after TTL expiry
+  - Double finalization prevention
+
+### Security Hardening
+
+- **Receipt viewer redaction**: Extended sensitive key redaction to include OAuth tokens (`access_token`, `refresh_token`, `id_token`, `jwt`, `bearer`), credentials (`private_key`, `public_key`, `key`, `credentials`, `credential`), session identifiers (`session`, `session_id`, `sessionid`, `csrf`, `csrf_token`), and common auth headers (`x-api-key`, `x-auth-token`, `x-access-token`)
+- **CSP headers on HTML views**: Added `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Permissions-Policy` to receipt viewer endpoints
+- **Token leakage prevention**: `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` on all HTML views
+- **XSS protection**: All user-supplied data escaped in HTML output
+- **Security test suite**: 11 tests covering token restriction, security headers, secret redaction, and XSS protection
+
+### Key Management Enhancements
+
+- **Token prefix display**: API key list now shows `keyPrefix` (e.g., `authensor_abc1...xy9z`) for identification without exposing full tokens
+- **Key rotation endpoint**: `POST /keys/:id/rotate` revokes old key and creates new one with same name/role, returns new token once
+- **Receipts export**: `GET /receipts/export` returns NDJSON with redacted secrets for data portability
+
+### Documentation
+
+- **Partner Starter Kit**: New `docs/partner/starter-kit.md` with env var reference, role mappings, and curl cheatsheet
+- **Operational Safety Defaults**: Documented recommended `AUTHENSOR_SANDBOX_MODE=stub` + optional kill switch for partner onboarding
 
 ### Added (Phase 2-4: Partner-Safe Access)
 
