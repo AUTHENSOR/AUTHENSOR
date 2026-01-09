@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://authensor.dev/schemas/action-envelope.schema.json",
+  "title": "ActionEnvelope",
+  "description": "An action envelope represents an intent to perform an action, submitted for policy evaluation before execution.",
+  "type": "object",
+  "required": ["id", "timestamp", "action", "principal", "context"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this action envelope"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the envelope was created"
+    },
+    "action": {
+      "type": "object",
+      "description": "The action to be performed",
+      "required": ["type", "resource"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Action type identifier (e.g., 'stripe.charges.create', 'github.issues.create', 'http.request')",
+          "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)*$"
+        },
+        "resource": {
+          "type": "string",
+          "description": "Target resource identifier or URL"
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["create", "read", "update", "delete", "execute"],
+          "description": "CRUDE operation type"
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Action-specific parameters",
+          "additionalProperties": true
+        }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "description": "The entity requesting the action",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["user", "agent", "service", "system"],
+          "description": "Type of principal"
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the principal"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable name for the principal"
+        },
+        "attributes": {
+          "type": "object",
+          "description": "Additional principal attributes for policy evaluation",
+          "additionalProperties": true
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "description": "Contextual information for policy evaluation",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session identifier"
+        },
+        "traceId": {
+          "type": "string",
+          "description": "Distributed trace ID for observability"
+        },
+        "parentEnvelopeId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Parent envelope ID if this is part of a chain"
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["development", "staging", "production"],
+          "description": "Deployment environment"
+        },
+        "sourceIp": {
+          "type": "string",
+          "description": "Source IP address"
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "User agent or client identifier"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional context metadata",
+          "additionalProperties": true
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Pre-declared constraints on this action",
+      "properties": {
+        "maxAmount": {
+          "type": "number",
+          "description": "Maximum monetary amount (for financial actions)"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "ISO 4217 currency code"
+        },
+        "allowedDomains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Allowed domains for HTTP requests"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum execution time in milliseconds"
+        },
+        "retryPolicy": {
+          "type": "object",
+          "properties": {
+            "maxRetries": { "type": "integer", "minimum": 0 },
+            "backoffMs": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

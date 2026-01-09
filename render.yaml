@@ -1,0 +1,53 @@
+# Authensor Tenant Blueprint
+# Deploy this to create a new tenant instance with Control Plane + Postgres
+#
+# Usage:
+#   1. In Render Dashboard: New → Blueprint
+#   2. Select this repo + branch (release/v0.5.0-alpha)
+#   3. Set the required environment variables
+#   4. Deploy
+#   5. Run smoke test: ./scripts/smoke_tenant.sh https://<service>.onrender.com
+
+services:
+  # Control Plane API
+  - type: web
+    name: authensor-control-plane
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: corepack enable && NODE_ENV=development corepack pnpm install && corepack pnpm run build
+    startCommand: node packages/control-plane/dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: authensor-db
+          property: connectionString
+      - key: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+        sync: false  # Prompts for value during Blueprint deploy
+      - key: AUTHENSOR_SANDBOX_MODE
+        value: stub  # Default to sandbox mode for alpha partners
+      - key: AUTHENSOR_CLAIM_TTL_SECONDS
+        value: "30"
+      # Partner-specific overrides (optional)
+      - key: AUTHENSOR_GITHUB_ALLOWED_REPOS
+        sync: false
+      - key: AUTHENSOR_GITHUB_ALLOWED_ORGS
+        sync: false
+      - key: AUTHENSOR_STRIPE_ALLOW_LIVE
+        value: "false"
+
+databases:
+  # PostgreSQL for receipts, policies, API keys
+  - name: authensor-db
+    region: oregon
+    plan: free
+    databaseName: authensor
+    user: authensor
+    ipAllowList: []  # Only allow internal connections

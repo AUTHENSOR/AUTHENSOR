@@ -1,0 +1,36 @@
+{
+  "name": "@authensor/schemas",
+  "version": "0.0.1",
+  "description": "JSON schemas for Authensor - Single Source of Truth",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./action-envelope.schema.json": "./src/action-envelope.schema.json",
+    "./action-receipt.schema.json": "./src/action-receipt.schema.json",
+    "./policy.schema.json": "./src/policy.schema.json"
+  },
+  "files": [
+    "src/**/*.json",
+    "src/index.js",
+    "src/index.d.ts"
+  ],
+  "scripts": {
+    "build": "echo 'Schemas are static JSON - no build needed'",
+    "test": "ajv validate -s src/action-envelope.schema.json -d test/fixtures/*.envelope.json",
+    "lint": "ajv compile -s src/*.schema.json"
+  },
+  "devDependencies": {
+    "ajv-cli": "^5.0.0"
+  },
+  "keywords": [
+    "authensor",
+    "schemas",
+    "json-schema"
+  ],
+  "license": "MIT"
+}
