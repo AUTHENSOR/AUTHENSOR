@@ -260,6 +260,8 @@ export async function claimReceipt(
   }
 
   const claimId = crypto.randomUUID();
+  // Atomic claim: only succeeds if no unexpired claim exists
+  // This prevents race conditions when multiple executors try to claim simultaneously
   const { rows: updated } = await db.query<ReceiptRow>(
     `UPDATE receipts
      SET claim_id = $2,
@@ -268,6 +270,7 @@ export async function claimReceipt(
          updated_at = now()
      WHERE id = $1
        AND status = 'pending'
+       AND (claim_id IS NULL OR claim_expires_at < now())
      RETURNING *`,
     [id, claimId, expiresAt.toISOString()]
   );
@@ -335,6 +338,7 @@ export async function updateReceipt(
          error = $7::jsonb,
          claim_id = CASE WHEN $2 IN ('executed','failed') THEN NULL ELSE claim_id END,
          claimed_at = CASE WHEN $2 IN ('executed','failed') THEN NULL ELSE claimed_at END,
+         claim_expires_at = CASE WHEN $2 IN ('executed','failed') THEN NULL ELSE claim_expires_at END,
          execution_attempts = CASE WHEN $2 IN ('executed','failed') THEN execution_attempts + 1 ELSE execution_attempts END,
          updated_at = now()
      WHERE id = $1
