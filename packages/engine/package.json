@@ -1,0 +1,41 @@
+{
+  "name": "@authensor/engine",
+  "version": "0.0.1",
+  "description": "Authensor decision engine - pure policy evaluation logic",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "gen": "cd ../schemas/src && json2ts -i action-envelope.schema.json -o ../../engine/src/generated/action-envelope.ts && json2ts -i action-receipt.schema.json -o ../../engine/src/generated/action-receipt.ts && json2ts -i policy.schema.json -o ../../engine/src/generated/policy.ts"
+  },
+  "dependencies": {
+    "@authensor/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "json-schema-to-typescript": "^13.1.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0"
+  },
+  "keywords": [
+    "authensor",
+    "engine",
+    "policy"
+  ],
+  "license": "MIT"
+}

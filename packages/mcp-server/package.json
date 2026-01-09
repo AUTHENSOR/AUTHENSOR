@@ -1,0 +1,42 @@
+{
+  "name": "@authensor/mcp-server",
+  "version": "0.0.1",
+  "description": "Authensor MCP Server - Stripe, GitHub, and HTTP tools with policy enforcement",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "authensor-mcp": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/cli.ts",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@authensor/engine": "workspace:*",
+    "@authensor/schemas": "workspace:*",
+    "ipaddr.js": "^2.2.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "stripe": "^14.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0"
+  },
+  "keywords": [
+    "authensor",
+    "mcp",
+    "model-context-protocol",
+    "stripe",
+    "github"
+  ],
+  "license": "MIT"
+}

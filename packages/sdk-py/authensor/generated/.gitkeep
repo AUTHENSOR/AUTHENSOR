@@ -1,0 +1,2 @@
+# Generated Pydantic models from JSON schemas
+# Run: datamodel-codegen --input ../schemas/src/*.schema.json --output .

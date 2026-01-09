@@ -1,0 +1,201 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://authensor.dev/schemas/policy.schema.json",
+  "title": "Policy",
+  "description": "A policy defines rules for evaluating action envelopes and making access control decisions.",
+  "type": "object",
+  "required": ["id", "name", "version", "rules"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for this policy"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable policy name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of what this policy does"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of this policy"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this policy is active"
+    },
+    "priority": {
+      "type": "integer",
+      "default": 0,
+      "description": "Evaluation priority (higher = evaluated first)"
+    },
+    "scope": {
+      "type": "object",
+      "description": "Define when this policy applies",
+      "properties": {
+        "actionTypes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Action types this policy applies to (glob patterns supported)"
+        },
+        "principalTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["user", "agent", "service", "system"]
+          },
+          "description": "Principal types this policy applies to"
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["development", "staging", "production"]
+          },
+          "description": "Environments this policy applies to"
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Policy rules evaluated in order",
+      "items": {
+        "type": "object",
+        "required": ["id", "effect"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique rule identifier within this policy"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable rule name"
+          },
+          "description": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": ["allow", "deny", "require_approval"],
+            "description": "Effect when rule matches"
+          },
+          "condition": {
+            "type": "object",
+            "description": "Condition that must match for this rule to apply",
+            "properties": {
+              "all": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/condition" },
+                "description": "All conditions must match (AND)"
+              },
+              "any": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/condition" },
+                "description": "Any condition must match (OR)"
+              },
+              "not": {
+                "$ref": "#/$defs/condition",
+                "description": "Condition must not match"
+              }
+            }
+          },
+          "rateLimit": {
+            "type": "object",
+            "description": "Rate limiting configuration",
+            "properties": {
+              "requests": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum requests"
+              },
+              "window": {
+                "type": "string",
+                "pattern": "^\\d+[smhd]$",
+                "description": "Time window (e.g., '1h', '24h', '7d')"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["principal", "action", "global"],
+                "description": "Rate limit scope"
+              }
+            },
+            "required": ["requests", "window"]
+          },
+          "approvalConfig": {
+            "type": "object",
+            "description": "Configuration for approval workflow",
+            "properties": {
+              "approvers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": { "type": "string" },
+                    "id": { "type": "string" }
+                  }
+                }
+              },
+              "expiresIn": {
+                "type": "string",
+                "pattern": "^\\d+[smhd]$",
+                "description": "Approval request expiration"
+              },
+              "requiredApprovals": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "defaultEffect": {
+      "type": "string",
+      "enum": ["allow", "deny"],
+      "default": "deny",
+      "description": "Default effect if no rules match"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional policy metadata",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "description": "A condition expression",
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Field path in the envelope (dot notation)"
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "in", "notIn", "contains", "startsWith", "endsWith", "matches", "exists"],
+          "description": "Comparison operator"
+        },
+        "value": {
+          "description": "Value to compare against"
+        },
+        "all": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "any": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "not": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

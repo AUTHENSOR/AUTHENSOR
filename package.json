@@ -1,0 +1,28 @@
+{
+  "name": "authensor",
+  "private": true,
+  "packageManager": "pnpm@9.15.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "gen:ts": "cd packages/schemas/src && ../../engine/node_modules/.bin/json2ts -i action-envelope.schema.json -o ../../engine/src/generated/action-envelope.ts && ../../engine/node_modules/.bin/json2ts -i action-receipt.schema.json -o ../../engine/src/generated/action-receipt.ts && ../../engine/node_modules/.bin/json2ts -i policy.schema.json -o ../../engine/src/generated/policy.ts && ../../sdk-ts/node_modules/.bin/json2ts -i action-envelope.schema.json -o ../../sdk-ts/src/generated/action-envelope.ts && ../../sdk-ts/node_modules/.bin/json2ts -i action-receipt.schema.json -o ../../sdk-ts/src/generated/action-receipt.ts && ../../sdk-ts/node_modules/.bin/json2ts -i policy.schema.json -o ../../sdk-ts/src/generated/policy.ts",
+    "gen:py": "cd packages/sdk-py && ( [ -x .venv/bin/python ] && .venv/bin/python -m authensor.codegen || (command -v uv >/dev/null && uv run --extra dev python -m authensor.codegen) || python -m authensor.codegen ) || echo 'Python codegen skipped (optional)'",
+    "gen": "npm run gen:ts --ignore-scripts && (npm run gen:py --ignore-scripts || true)",
+    "gen:check": "npm run gen --ignore-scripts && (git rev-parse --git-dir >/dev/null 2>&1 && git diff --exit-code packages/*/src/generated packages/sdk-py/authensor/generated || echo 'Not in git repo, skipping diff check')",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  # PostgreSQL for receipts and policy storage
+  postgres:
+    image: postgres:16-alpine
+    container_name: authensor-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-authensor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-authensor_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-authensor}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authensor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Control Plane API (built from local source)
+  control-plane:
+    build:
+      context: .
+      dockerfile: packages/control-plane/Dockerfile
+    container_name: authensor-control-plane
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://authensor:authensor_dev@postgres:5432/authensor
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Mount source for hot reload in dev
+      - ./packages/control-plane/src:/app/packages/control-plane/src
+      - ./packages/engine/src:/app/packages/engine/src
+      - ./packages/schemas/src:/app/packages/schemas/src
+
+  # MCP Server (for local testing)
+  mcp-server:
+    build:
+      context: .
+      dockerfile: packages/mcp-server/Dockerfile
+    container_name: authensor-mcp-server
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      CONTROL_PLANE_URL: http://control-plane:3000
+      # Integration credentials (from .env)
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on:
+      - control-plane
+    volumes:
+      - ./packages/mcp-server/src:/app/packages/mcp-server/src
+
+volumes:
+  postgres_data:
