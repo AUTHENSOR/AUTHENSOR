@@ -4,10 +4,15 @@ import { requireRole } from '../auth/middleware.js';
 
 export const claimsRoute = new Hono();
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // POST /receipts/:id/claim - Claim a receipt for execution
 // Requires: executor | admin role
 claimsRoute.post('/:id/claim', requireRole(['executor', 'admin']), async (c) => {
   const id = c.req.param('id');
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: 'Invalid receipt ID format' }, 400);
+  }
   const result = await claimReceipt(id);
 
   if (result.status === 'claimed') {

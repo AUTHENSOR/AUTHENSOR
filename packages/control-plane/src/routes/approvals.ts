@@ -14,11 +14,16 @@ import { requireRole } from '../auth/middleware.js';
 
 export const approvalsRoute = new Hono();
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Apply admin role requirement to all routes
 approvalsRoute.use('*', requireRole(['admin']));
 
 approvalsRoute.post('/:id/approve', async (c) => {
   const id = c.req.param('id');
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: 'Invalid receipt ID format' }, 400);
+  }
   const receipt = await getReceiptById(id);
 
   if (!receipt) {
@@ -44,6 +49,9 @@ approvalsRoute.post('/:id/approve', async (c) => {
 
 approvalsRoute.post('/:id/reject', async (c) => {
   const id = c.req.param('id');
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: 'Invalid receipt ID format' }, 400);
+  }
   const receipt = await getReceiptById(id);
 
   if (!receipt) {
@@ -70,6 +78,9 @@ approvalsRoute.post('/:id/reject', async (c) => {
 
 approvalsRoute.post('/:id/expire', async (c) => {
   const id = c.req.param('id');
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: 'Invalid receipt ID format' }, 400);
+  }
   const receipt = await getReceiptById(id);
 
   if (!receipt) {

@@ -19,6 +19,7 @@ import {
 import { requireRole } from '../auth/middleware.js';
 
 const SENSITIVE_KEYS = [
+  // Auth headers
   'authorization',
   'token',
   'api_key',
@@ -27,6 +28,28 @@ const SENSITIVE_KEYS = [
   'password',
   'cookie',
   'set-cookie',
+  // OAuth/JWT tokens
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'jwt',
+  'bearer',
+  // Keys and credentials
+  'private_key',
+  'public_key',
+  'key',
+  'credentials',
+  'credential',
+  // Session identifiers
+  'session',
+  'session_id',
+  'sessionid',
+  'csrf',
+  'csrf_token',
+  // Common sensitive headers/params
+  'x-api-key',
+  'x-auth-token',
+  'x-access-token',
 ];
 
 function redactSecrets(value: unknown): unknown {
@@ -120,6 +143,35 @@ receiptsRoute.get('/', requireRole(['admin']), async (c) => {
   });
 });
 
+// Export receipts as NDJSON (admin only - for data export)
+// GET /receipts/export?from=ISO&to=ISO&limit=1000
+receiptsRoute.get('/export', requireRole(['admin']), async (c) => {
+  const limit = Math.min(parseInt(c.req.query('limit') || '1000', 10), 10000);
+  const status = c.req.query('status');
+  const toolName = c.req.query('toolName');
+  const actorId = c.req.query('actorId');
+  const decisionOutcome = c.req.query('decisionOutcome');
+
+  const receipts = await getReceipts({
+    limit,
+    status: status || undefined,
+    toolName: toolName || undefined,
+    actorId: actorId || undefined,
+    decisionOutcome: decisionOutcome || undefined,
+  });
+
+  // Redact secrets before export
+  const redactedReceipts = receipts.map((r) => redactSecrets(r));
+
+  // Return as NDJSON for easy streaming/parsing
+  const ndjson = redactedReceipts.map((r) => JSON.stringify(r)).join('\n');
+
+  c.header('Content-Type', 'application/x-ndjson');
+  c.header('Content-Disposition', `attachment; filename="receipts-export-${new Date().toISOString().slice(0, 10)}.ndjson"`);
+
+  return c.body(ndjson);
+});
+
 // HTML list view (admin only - audit data)
 // Security headers prevent token leakage when using ?token= in sandbox mode
 receiptsRoute.get('/view', requireRole(['admin']), async (c) => {
@@ -127,6 +179,11 @@ receiptsRoute.get('/view', requireRole(['admin']), async (c) => {
   c.header('Cache-Control', 'no-store');
   c.header('Referrer-Policy', 'no-referrer');
   c.header('X-Robots-Tag', 'noindex');
+  // CSP and hardening headers
+  c.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
   const limit = parseInt(c.req.query('limit') || '50', 10);
   const status = c.req.query('status');
@@ -188,9 +245,14 @@ receiptsRoute.get('/view', requireRole(['admin']), async (c) => {
   </html>`);
 });
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Get single receipt (admin | executor - executor needs to read receipts it executes)
 receiptsRoute.get('/:id', requireRole(['admin', 'executor']), async (c) => {
   const id = c.req.param('id');
+  if (!UUID_REGEX.test(id)) {
+    return c.json({ error: 'Invalid receipt ID format' }, 400);
+  }
   const receipt = await getReceiptById(id);
 
   if (!receipt) {
@@ -204,6 +266,9 @@ receiptsRoute.get('/:id', requireRole(['admin', 'executor']), async (c) => {
 // Security headers prevent token leakage when using ?token= in sandbox mode
 receiptsRoute.get('/:id/view', requireRole(['admin', 'executor']), async (c) => {
   const id = c.req.param('id');
+  if (!UUID_REGEX.test(id)) {
+    return c.html('<h1>Invalid receipt ID format</h1>', 400);
+  }
   const receipt = await getReceiptById(id);
   if (!receipt) return c.html('<h1>Receipt not found</h1>', 404);
 
@@ -211,6 +276,11 @@ receiptsRoute.get('/:id/view', requireRole(['admin', 'executor']), async (c) => 
   c.header('Cache-Control', 'no-store');
   c.header('Referrer-Policy', 'no-referrer');
   c.header('X-Robots-Tag', 'noindex');
+  // CSP and hardening headers
+  c.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
   const safe = redactSecrets(receipt);
   const policyId = (receipt.decision as any)?.policyId || 'unknown';
@@ -299,6 +369,9 @@ receiptsRoute.patch(
   zValidator('json', updateReceiptSchema),
   async (c) => {
     const id = c.req.param('id');
+    if (!UUID_REGEX.test(id)) {
+      return c.json({ error: 'Invalid receipt ID format' }, 400);
+    }
     const updates = c.req.valid('json');
 
     try {

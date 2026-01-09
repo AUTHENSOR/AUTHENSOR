@@ -44,3 +44,6 @@ pnpm-debug.log*
 
 # Docker
 .docker/
+
+# Claude Code
+.claude/settings.local.json
