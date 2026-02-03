@@ -11,6 +11,7 @@ import type { Role } from '../auth/types.js';
 // In-memory rate limit state
 // Key format: `${keyId}:${routeGroup}:${windowStart}`
 const rateLimitState = new Map<string, number>();
+const webhookSentState = new Map<string, number>();
 
 // Clean up old windows periodically
 const CLEANUP_INTERVAL_MS = 60_000; // 1 minute
@@ -28,6 +29,13 @@ function cleanupOldWindows(): void {
     const windowStart = parseInt(parts[parts.length - 1], 10);
     if (windowStart < cutoff) {
       rateLimitState.delete(key);
+    }
+  }
+  for (const key of webhookSentState.keys()) {
+    const parts = key.split(':');
+    const windowStart = parseInt(parts[parts.length - 1], 10);
+    if (windowStart < cutoff) {
+      webhookSentState.delete(key);
     }
   }
 }
@@ -91,6 +99,17 @@ export const rateLimitMiddleware: MiddlewareHandler = async (c: Context, next: N
   if (current >= limit) {
     const windowEnd = (windowStart + 1) * 60_000;
     const retryAfterSeconds = Math.ceil((windowEnd - Date.now()) / 1000);
+    maybeSendRateLimitWebhook({
+      keyId,
+      role,
+      routeGroup,
+      path: c.req.path,
+      method: c.req.method,
+      limit,
+      current,
+      windowStart,
+      retryAfterSeconds: Math.max(1, retryAfterSeconds),
+    });
 
     return c.json(
       {
@@ -113,6 +132,45 @@ export const rateLimitMiddleware: MiddlewareHandler = async (c: Context, next: N
 
   return next();
 };
+
+function maybeSendRateLimitWebhook(payload: {
+  keyId: string;
+  role: Role;
+  routeGroup: string;
+  path: string;
+  method: string;
+  limit: number;
+  current: number;
+  windowStart: number;
+  retryAfterSeconds: number;
+}): void {
+  const url = process.env.AUTHENSOR_RATE_LIMIT_WEBHOOK_URL;
+  if (!url) return;
+
+  const webhookKey = `${payload.keyId}:${payload.routeGroup}:${payload.windowStart}`;
+  if (webhookSentState.has(webhookKey)) return;
+  webhookSentState.set(webhookKey, Date.now());
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const secret = process.env.AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET;
+  if (secret) {
+    headers.Authorization = `Bearer ${secret}`;
+  }
+
+  const body = JSON.stringify({
+    event: 'rate_limit',
+    timestamp: new Date().toISOString(),
+    ...payload,
+  });
+
+  try {
+    void fetch(url, { method: 'POST', headers, body }).catch(() => {});
+  } catch {
+    // ignore webhook failures
+  }
+}
 
 /**
  * Export for testing purposes
