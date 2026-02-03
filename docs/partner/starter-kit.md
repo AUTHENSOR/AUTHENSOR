@@ -76,6 +76,8 @@ These defaults ensure:
 | `AUTHENSOR_RL_INGEST_PER_MIN` | `120` | Rate limit for ingest role |
 | `AUTHENSOR_RL_EXECUTOR_PER_MIN` | `60` | Rate limit for executor role |
 | `AUTHENSOR_RL_ADMIN_PER_MIN` | `120` | Rate limit for admin role |
+| `AUTHENSOR_RATE_LIMIT_WEBHOOK_URL` | - | Optional webhook to notify on rate limit events |
+| `AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET` | - | Optional shared secret sent as `Authorization: Bearer ...` |
 
 ---
 

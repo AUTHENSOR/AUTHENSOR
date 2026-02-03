@@ -499,6 +499,14 @@ export AUTHENSOR_RL_EXECUTOR_PER_MIN=100
 export AUTHENSOR_RL_ADMIN_PER_MIN=200
 ```
 
+### Optional Rate-Limit Webhook
+If you want notifications when a key hits rate limits, set:
+```bash
+export AUTHENSOR_RATE_LIMIT_WEBHOOK_URL=https://your-webhook.example.com
+export AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET=your_shared_secret
+```
+The control plane will send a JSON payload on the first limit hit per key+route group+minute window. The secret, if set, is sent as `Authorization: Bearer <secret>`.
+
 ## Alpha Stability Guarantees
 Scope: 0.x alpha; contracts are stable within 0.x unless explicitly noted in CHANGELOG.md.
 
