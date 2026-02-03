@@ -8,12 +8,46 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { PolicyEngine, type Policy } from '@authensor/engine';
+import { PolicyEngine, createDecision, type Policy } from '@authensor/engine';
 import { getActivePolicy } from '../services/policy-service.js';
 import { createReceipt } from '../services/receipt-service.js';
 import { requireRole } from '../auth/middleware.js';
 
 export const evaluateRoute = new Hono();
+
+const POLICY_ALERT_MIN_INTERVAL_MS = 60_000;
+let lastPolicyAlertAt = 0;
+
+async function maybeSendPolicyMissingAlert(payload: {
+  orgId: string;
+  environment: string;
+  receiptId: string;
+  actionType?: string;
+  principalId?: string;
+}): Promise<void> {
+  const url = process.env.AUTHENSOR_POLICY_ALERT_WEBHOOK_URL;
+  if (!url) return;
+
+  const now = Date.now();
+  if (now - lastPolicyAlertAt < POLICY_ALERT_MIN_INTERVAL_MS) return;
+  lastPolicyAlertAt = now;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const secret = process.env.AUTHENSOR_POLICY_ALERT_WEBHOOK_SECRET;
+  if (secret) headers.Authorization = `Bearer ${secret}`;
+
+  const body = JSON.stringify({
+    event: 'policy_missing',
+    timestamp: new Date().toISOString(),
+    ...payload,
+  });
+
+  try {
+    await fetch(url, { method: 'POST', headers, body });
+  } catch {
+    // best-effort alerting
+  }
+}
 
 // Request schema (matches ActionEnvelope but more permissive for validation)
 const evaluateRequestSchema = z.object({
@@ -72,6 +106,63 @@ evaluateRoute.post(
 
     // Get active policy
     const activePolicy = await getActivePolicy(orgId, environment);
+    const allowFallback = process.env.AUTHENSOR_ALLOW_FALLBACK_POLICY === 'true';
+
+    if (!activePolicy && !allowFallback) {
+      const decision = createDecision('deny', {
+        policyId: 'none',
+        policyVersion: 'none',
+        reason: 'NO_POLICY_CONFIGURED',
+      });
+
+      const receipt = await createReceipt({
+        envelopeId: envelope.id,
+        decision,
+        envelope,
+      });
+
+      await maybeSendPolicyMissingAlert({
+        orgId,
+        environment,
+        receiptId: receipt.id,
+        actionType: envelope.action?.type,
+        principalId: envelope.principal?.id,
+      });
+
+      const baseUrl = (() => {
+        try {
+          const url = new URL(c.req.url);
+          if (url.protocol && url.host) return `${url.protocol}//${url.host}`;
+        } catch {
+          // ignore
+        }
+        const host = c.req.header('host');
+        if (host) {
+          const proto = c.req.header('x-forwarded-proto') || 'http';
+          return `${proto}://${host}`;
+        }
+        return '';
+      })();
+
+      const receiptViewPath = `/receipts/${receipt.id}/view`;
+      const receiptApiPath = `/receipts/${receipt.id}`;
+
+      return c.json({
+        receiptId: receipt.id,
+        receiptUrl: receiptViewPath,
+        receiptApiUrl: receiptApiPath,
+        receiptLink: baseUrl ? `${baseUrl}${receiptViewPath}` : undefined,
+        receiptApiLink: baseUrl ? `${baseUrl}${receiptApiPath}` : undefined,
+        decision,
+        policy: {
+          id: 'none',
+          version: 'none',
+          source: 'none',
+        },
+        evaluationTimeMs: 0,
+      });
+    }
+
     const fallbackPolicy: Policy = {
       id: 'allow-all',
       name: 'Default Allow-All',
