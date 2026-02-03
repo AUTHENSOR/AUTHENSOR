@@ -507,6 +507,20 @@ export AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET=your_shared_secret
 ```
 The control plane will send a JSON payload on the first limit hit per key+route group+minute window. The secret, if set, is sent as `Authorization: Bearer <secret>`.
 
+### Policy Safety (Fail-Closed)
+By default, if no active policy exists, the control plane **denies** requests and returns a decision reason `NO_POLICY_CONFIGURED`.
+
+To explicitly allow a fallback policy (dev only), set:
+```bash
+export AUTHENSOR_ALLOW_FALLBACK_POLICY=true
+```
+
+Optional alert if no policy is configured:
+```bash
+export AUTHENSOR_POLICY_ALERT_WEBHOOK_URL=https://your-webhook.example.com
+export AUTHENSOR_POLICY_ALERT_WEBHOOK_SECRET=your_shared_secret
+```
+
 ## Alpha Stability Guarantees
 Scope: 0.x alpha; contracts are stable within 0.x unless explicitly noted in CHANGELOG.md.
 

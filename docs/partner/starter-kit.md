@@ -78,6 +78,9 @@ These defaults ensure:
 | `AUTHENSOR_RL_ADMIN_PER_MIN` | `120` | Rate limit for admin role |
 | `AUTHENSOR_RATE_LIMIT_WEBHOOK_URL` | - | Optional webhook to notify on rate limit events |
 | `AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET` | - | Optional shared secret sent as `Authorization: Bearer ...` |
+| `AUTHENSOR_ALLOW_FALLBACK_POLICY` | `false` | Allow fallback allow-all policy when no active policy exists (dev only) |
+| `AUTHENSOR_POLICY_ALERT_WEBHOOK_URL` | - | Optional alert webhook when no policy is configured |
+| `AUTHENSOR_POLICY_ALERT_WEBHOOK_SECRET` | - | Optional shared secret for policy alert webhook |
 
 ---
 

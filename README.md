@@ -297,6 +297,13 @@ AUTHENSOR_RL_ADMIN_PER_MIN=120
 # Optional rate-limit webhook
 AUTHENSOR_RATE_LIMIT_WEBHOOK_URL=https://your-webhook.example.com
 AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET=your_shared_secret
+
+# Policy safety
+# Fail-closed by default when no active policy exists
+AUTHENSOR_ALLOW_FALLBACK_POLICY=false
+# Optional alert when no policy is configured
+AUTHENSOR_POLICY_ALERT_WEBHOOK_URL=https://your-webhook.example.com
+AUTHENSOR_POLICY_ALERT_WEBHOOK_SECRET=your_shared_secret
 ```
 
 ## License
