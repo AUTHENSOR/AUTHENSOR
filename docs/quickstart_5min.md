@@ -62,6 +62,7 @@ Approvals can be handled by email with signed links (no UI required). Setup live
 - Short receipt retention
 - Custom policies unlocked on paid tiers
 - Demo keys auto-expire after 7 days (upgrade email sent)
+ - Optional email domain allowlist for demo keys (set in Apps Script)
 
 ## Request Demo Key
 Form: https://forms.gle/QdfeWAr2G4pc8GxQA  
