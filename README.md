@@ -6,20 +6,28 @@ Authensor is a framework for adding authorization, audit logging, and guardrails
 
 ## Quick Start
 
+Start here: `docs/quickstart_5min.md`
+
+OpenClaw hosted beta:
+- ClawHub listing: `https://www.clawhub.ai/AUTHENSOR/authensor-gateway`
+- Demo key form (keys emailed automatically): `https://forms.gle/QdfeWAr2G4pc8GxQA`
+- Public repo: `https://github.com/AUTHENSOR/Authensor-for-OpenClaw`
+
 ```bash
 # Install dependencies
-pnpm install
+corepack enable
+corepack pnpm install
 
 # Start infrastructure (Postgres)
 docker compose up -d postgres
 
 # Start development servers
-pnpm dev
+corepack pnpm dev
 
 # The control plane is now running at http://localhost:3000
-
-- Full alpha onboarding: docs/alpha_onboarding.md
 ```
+
+Full alpha onboarding: `docs/alpha_onboarding.md`
 
 When you edit any JSON Schema in `packages/schemas/src/*.schema.json`, regenerate all SDK/engine models:
 
