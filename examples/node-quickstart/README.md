@@ -23,8 +23,8 @@ corepack pnpm start
 # Or from the root
 corepack pnpm --filter @authensor/example-node-quickstart start
 
-# For remote deployments (e.g., Render)
-export CONTROL_PLANE_URL=https://your-service.onrender.com
+# For remote deployments (e.g., Railway)
+export CONTROL_PLANE_URL=https://your-service.up.railway.app
 export AUTHENSOR_API_KEY=authensor_your_key
 corepack pnpm start
 ```
