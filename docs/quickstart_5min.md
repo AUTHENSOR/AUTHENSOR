@@ -17,7 +17,7 @@ Edit `~/.openclaw/openclaw.json` (JSON5) and add:
       "authensor-gateway": {
         enabled: true,
         env: {
-          CONTROL_PLANE_URL: "https://authensor-control-plane.onrender.com",
+          CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
           AUTHENSOR_API_KEY: "authensor_demo_..."
         }
       }
@@ -35,7 +35,7 @@ If you use sandboxed OpenClaw sessions, also add:
       sandbox: {
         docker: {
           env: {
-            CONTROL_PLANE_URL: "https://authensor-control-plane.onrender.com",
+            CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
             AUTHENSOR_API_KEY: "authensor_demo_..."
           }
         }

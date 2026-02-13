@@ -98,7 +98,7 @@ These defaults ensure:
 
 All examples assume:
 ```bash
-export BASE_URL=https://your-tenant.onrender.com
+export BASE_URL=https://your-tenant.up.railway.app
 export ADMIN_KEY=authensor_your_admin_key
 export INGEST_KEY=authensor_your_ingest_key
 export EXECUTOR_KEY=authensor_your_executor_key

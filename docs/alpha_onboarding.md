@@ -46,11 +46,11 @@ This ensures:
 
 ## Deploy Your Own Tenant (Recommended)
 
-Deploy your own Authensor control plane on Render (free tier works).
+Deploy your own Authensor control plane on Railway.
 
-### Step 1: Deploy via Render Blueprint
+### Step 1: Deploy via Railway
 
-1. Go to [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**
+1. Go to [Railway Dashboard](https://railway.app/dashboard) → **New Project** → **Deploy from GitHub repo**
 2. Connect to GitHub repo `AUTHENSOR/AUTHENSOR-ALPHA`, branch `release/v1.5.0-alpha`
 3. Set the required environment variable:
    - `AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN`: Generate with `openssl rand -base64 32`
@@ -60,7 +60,7 @@ Deploy your own Authensor control plane on Render (free tier works).
 
 ```bash
 export AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN="<your-token>"
-./scripts/smoke_tenant.sh https://<your-service>.onrender.com
+./scripts/smoke_tenant.sh https://<your-service>.up.railway.app
 ```
 
 Save the API keys printed at the end:
@@ -73,7 +73,7 @@ Save the API keys printed at the end:
 **Option A: Direct API (curl)**
 ```bash
 # Evaluate an action (id must be a UUID)
-curl -X POST https://<your-service>.onrender.com/evaluate \
+curl -X POST https://<your-service>.up.railway.app/evaluate \
   -H "Authorization: Bearer <ingest-key>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -95,7 +95,7 @@ corepack enable
 corepack pnpm install
 
 # Set your endpoint and API key
-export CONTROL_PLANE_URL=https://<your-service>.onrender.com
+export CONTROL_PLANE_URL=https://<your-service>.up.railway.app
 export AUTHENSOR_API_KEY=<your-ingest-key>
 
 # Run the quickstart
@@ -121,7 +121,7 @@ const result = await authensor.execute('stripe.list_customers', 'stripe://custom
 
 **Option C: MCP Server** (for MCP-compatible clients)
 ```bash
-CONTROL_PLANE_URL=https://<your-service>.onrender.com \
+CONTROL_PLANE_URL=https://<your-service>.up.railway.app \
 AUTHENSOR_API_KEY=<your-executor-key> \
 AUTHENSOR_SANDBOX_MODE=stub \
 npx @authensor/mcp-server
