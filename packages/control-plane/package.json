@@ -27,6 +27,12 @@
     "pg": "^8.11.0",
     "zod": "^3.22.0"
   },
+  "optionalDependencies": {
+    "@authensor/aegis": "workspace:*",
+    "@authensor/sentinel": "workspace:*",
+    "@opentelemetry/api": "^1.7.0",
+    "sigstore": "^3.0.0"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@types/pg": "^8.10.0",

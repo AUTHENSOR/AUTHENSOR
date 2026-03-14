@@ -9,9 +9,15 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { PolicyEngine, createDecision, type Policy } from '@authensor/engine';
-import { getActivePolicy } from '../services/policy-service.js';
+import { getActivePolicy, getPolicyById } from '../services/policy-service.js';
+import { recordShadowEvaluation } from '../services/shadow-service.js';
 import { createReceipt } from '../services/receipt-service.js';
 import { requireRole } from '../auth/middleware.js';
+import {
+  startEvaluationSpan,
+  endEvaluationSpan,
+  buildEvalAttributes,
+} from '../services/telemetry-service.js';
 
 export const evaluateRoute = new Hono();
 
@@ -69,6 +75,7 @@ const evaluateRequestSchema = z.object({
     sessionId: z.string().optional(),
     traceId: z.string().optional(),
     parentEnvelopeId: z.string().uuid().optional(),
+    parentReceiptId: z.string().uuid().optional(),
     environment: z.enum(['development', 'staging', 'production']).optional(),
     sourceIp: z.string().optional(),
     userAgent: z.string().optional(),
@@ -96,6 +103,41 @@ evaluateRoute.post(
   zValidator('json', evaluateRequestSchema),
   async (c) => {
     const envelope = c.req.valid('json');
+    const auth = c.get('auth');
+
+    // Principal binding verification
+    // Admin keys are exempt — they may specify any principal
+    if (auth.role !== 'admin') {
+      if (auth.principalId) {
+        // Key has a bound principal — envelope must match
+        if (envelope.principal.id !== auth.principalId) {
+          return c.json(
+            {
+              error: {
+                code: 'PRINCIPAL_MISMATCH',
+                message: 'Principal ID does not match authenticated key',
+              },
+            },
+            403
+          );
+        }
+      } else if (process.env.AUTHENSOR_STRICT_PRINCIPAL_BINDING === 'true') {
+        // Strict mode: all non-admin keys must have a principal binding
+        return c.json(
+          {
+            error: {
+              code: 'PRINCIPAL_BINDING_REQUIRED',
+              message: 'Strict mode requires all keys to have a principal binding',
+            },
+          },
+          403
+        );
+      }
+    }
+
+    // Start OTel span (no-ops if disabled or unavailable)
+    const span = await startEvaluationSpan();
+    const evalStart = performance.now();
 
     const orgIdHeader = c.req.header('x-authensor-org');
     const envHeader = c.req.header('x-authensor-env');
@@ -188,6 +230,62 @@ evaluateRoute.post(
       approvalConfig: result.matchedRule?.approvalConfig,
     });
 
+    // Finish OTel span with evaluation attributes
+    const durationMs = performance.now() - evalStart;
+    const attrs = buildEvalAttributes(envelope, result, receipt.id);
+    endEvaluationSpan(span, attrs, durationMs);
+
+    // Shadow/canary evaluation (non-blocking, never affects active decision)
+    let shadowResult: {
+      decision: string;
+      policyId: string;
+      policyVersion: string;
+      matchedRule?: string;
+      reason?: string;
+    } | undefined;
+
+    const shadowPolicyParam = c.req.query('shadow') ?? process.env.AUTHENSOR_SHADOW_POLICY_ID;
+    if (shadowPolicyParam) {
+      try {
+        // Parse optional version: "policyId@version"
+        const [shadowPolicyId, shadowVersion] = shadowPolicyParam.includes('@')
+          ? shadowPolicyParam.split('@', 2)
+          : [shadowPolicyParam, undefined];
+
+        const shadowPolicy = await getPolicyById(orgId, environment, shadowPolicyId, shadowVersion);
+
+        if (shadowPolicy) {
+          const shadowEngine = new PolicyEngine();
+          const shadowEval = shadowEngine.evaluate(envelope, [shadowPolicy]);
+
+          shadowResult = {
+            decision: shadowEval.decision.outcome,
+            policyId: shadowPolicy.id,
+            policyVersion: shadowPolicy.version,
+            matchedRule: shadowEval.matchedRule?.id,
+            reason: shadowEval.decision.reason,
+          };
+
+          // Record shadow evaluation (fire-and-forget)
+          recordShadowEvaluation({
+            receiptId: receipt.id,
+            activePolicyId: policyToUse.id,
+            activePolicyVersion: policyToUse.version,
+            activeDecision: result.decision.outcome,
+            activeMatchedRule: result.matchedRule?.id,
+            activeReason: result.decision.reason,
+            shadowPolicyId: shadowPolicy.id,
+            shadowPolicyVersion: shadowPolicy.version,
+            shadowDecision: shadowEval.decision.outcome,
+            shadowMatchedRule: shadowEval.matchedRule?.id,
+            shadowReason: shadowEval.decision.reason,
+          }).catch(() => {});
+        }
+      } catch {
+        // Shadow evaluation failures never affect the active decision
+      }
+    }
+
     const baseUrl = (() => {
       try {
         const url = new URL(c.req.url);
@@ -219,6 +317,7 @@ evaluateRoute.post(
         source: activePolicy ? 'db' : 'fallback',
       },
       evaluationTimeMs: result.evaluationTimeMs,
+      ...(shadowResult ? { shadowResult } : {}),
     });
   }
 );

@@ -10,6 +10,7 @@ export interface AuthContext {
   keyId: string;
   role: Role;
   name: string;
+  principalId: string | null;
 }
 
 export interface ApiKey {
@@ -17,6 +18,7 @@ export interface ApiKey {
   name: string;
   role: Role;
   keyHash: string;
+  principalId: string | null;
   createdAt: string;
   revokedAt: string | null;
   lastUsedAt: string | null;

@@ -16,6 +16,7 @@ import { z } from 'zod';
 import {
   getReceipts,
   getReceiptById,
+  getReceiptChain,
   updateReceipt,
   verifyReceiptChain,
 } from '../services/receipt-service.js';
@@ -260,6 +261,22 @@ receiptsRoute.get('/view', requireRole(['admin']), async (c) => {
 });
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Get receipt chain - ancestors and descendants (admin only)
+receiptsRoute.get('/:id/chain', requireRole(['admin']), async (c) => {
+  const id = c.req.param('id');
+  const chain = await getReceiptChain(id);
+
+  if (chain.length === 0) {
+    return c.json({ error: 'Receipt not found' }, 404);
+  }
+
+  return c.json({
+    receiptId: id,
+    chain: chain.map((r) => withLinks(c, r)),
+    chainLength: chain.length,
+  });
+});
 
 // Get single receipt (admin | executor - executor needs to read receipts it executes)
 receiptsRoute.get('/:id', requireRole(['admin', 'executor']), async (c) => {

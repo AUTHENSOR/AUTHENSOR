@@ -11,6 +11,7 @@ import { checkToolExecution } from './controls-service.js';
 import { notifyApprovalRequired } from './approval-notifier.js';
 import { truncateResult, truncateError } from '../middleware/body_limit.js';
 import { parseDuration } from './approval-expirer.js';
+import { isTransparencyEnabled, publishToRekor } from './transparency-service.js';
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
@@ -64,6 +65,8 @@ type ReceiptRow = {
   execution_attempts: number;
   receipt_hash: string | null;
   prev_receipt_hash: string | null;
+  parent_receipt_id: string | null;
+  rekor_entry_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -127,6 +130,7 @@ function mapRow(row: ReceiptRow): ActionReceipt {
         }
       : undefined,
     envelope: row.envelope as ActionEnvelope,
+    parentReceiptId: row.parent_receipt_id ?? undefined,
     receiptHash: row.receipt_hash ?? undefined,
     prevReceiptHash: row.prev_receipt_hash ?? undefined,
     metadata: {
@@ -134,6 +138,7 @@ function mapRow(row: ReceiptRow): ActionReceipt {
       claimedAt: row.claimed_at ?? undefined,
       claimExpiresAt: row.claim_expires_at ?? undefined,
       executionAttempts: row.execution_attempts,
+      rekorEntryId: row.rekor_entry_id ?? undefined,
     },
   };
 }
@@ -166,6 +171,9 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
         } as ActionReceipt['approval'])
       : undefined;
 
+  // Cross-agent chain: extract parent receipt ID from envelope context
+  const parentReceiptId = (input.envelope.context as any)?.parentReceiptId ?? null;
+
   // Hash chain: link this receipt to the previous one
   const prevHash = await getLatestReceiptHash();
   const now = new Date().toISOString();
@@ -178,12 +186,13 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
   });
 
   const { rows } = await db.query<ReceiptRow>(
-    `INSERT INTO receipts (id, envelope_id, status, decision_outcome, tool_name, actor_id, envelope, decision, approval, approval_status, execution_attempts, receipt_hash, prev_receipt_hash, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, 0, $11, $12, $13, $13)
+    `INSERT INTO receipts (id, envelope_id, parent_receipt_id, status, decision_outcome, tool_name, actor_id, envelope, decision, approval, approval_status, execution_attempts, receipt_hash, prev_receipt_hash, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11, 0, $12, $13, $14, $14)
      RETURNING *`,
     [
       id,
       input.envelopeId,
+      parentReceiptId,
       status,
       input.decision.outcome,
       input.envelope.action?.type ?? null,
@@ -203,6 +212,11 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
   // Fire-and-forget: notify approvers when approval is required
   if (input.decision.outcome === 'require_approval') {
     notifyApprovalRequired(receipt).catch(() => {});
+  }
+
+  // Fire-and-forget: publish receipt to Rekor transparency log
+  if (isTransparencyEnabled()) {
+    publishToRekor(receipt).catch(() => {});
   }
 
   return receipt;
@@ -485,6 +499,90 @@ export async function verifyReceiptChain(options?: {
   }
 
   return { verified, broken, unchained, firstBrokenId };
+}
+
+// --- Receipt chain traversal ---
+
+/**
+ * Get the full chain of receipts linked by parentReceiptId.
+ * Walks ancestors (up) and descendants (BFS down), returns root-to-leaf order.
+ */
+export async function getReceiptChain(id: string): Promise<ActionReceipt[]> {
+  // Check receipt exists
+  const { rows: rootRows } = await db.query<ReceiptRow>('SELECT * FROM receipts WHERE id = $1', [id]);
+  if (rootRows.length === 0) return [];
+
+  const visited = new Set<string>();
+  const allRows: ReceiptRow[] = [];
+  const MAX_CHAIN_SIZE = 100;
+
+  // Walk ancestors
+  let currentId: string | null = id;
+  const ancestors: ReceiptRow[] = [];
+  while (currentId && !visited.has(currentId) && ancestors.length < MAX_CHAIN_SIZE) {
+    visited.add(currentId);
+    const { rows }: { rows: ReceiptRow[] } = await db.query<ReceiptRow>('SELECT * FROM receipts WHERE id = $1', [currentId]);
+    if (rows.length === 0) break;
+    ancestors.unshift(rows[0]);
+    currentId = rows[0].parent_receipt_id;
+  }
+  allRows.push(...ancestors);
+
+  // BFS descendants
+  const queue: string[] = [id];
+  while (queue.length > 0 && allRows.length < MAX_CHAIN_SIZE) {
+    const parentId = queue.shift()!;
+    const { rows: children } = await db.query<ReceiptRow>(
+      'SELECT * FROM receipts WHERE parent_receipt_id = $1',
+      [parentId]
+    );
+    for (const child of children) {
+      if (!visited.has(child.id)) {
+        visited.add(child.id);
+        allRows.push(child);
+        queue.push(child.id);
+      }
+    }
+  }
+
+  // Sort by created_at for root-to-leaf ordering
+  allRows.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return allRows.map(mapRow);
+}
+
+/**
+ * Count direct children of a receipt (fan-out).
+ */
+export async function getReceiptChildCount(id: string): Promise<number> {
+  const { rows } = await db.query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM receipts WHERE parent_receipt_id = $1',
+    [id]
+  );
+  return parseInt(rows[0]?.count ?? '0', 10);
+}
+
+/**
+ * Get the depth of a receipt in its chain (how many ancestors).
+ */
+export async function getReceiptChainDepth(id: string): Promise<number> {
+  let depth = 0;
+  const visited = new Set<string>();
+  let currentId = id;
+
+  while (true) {
+    if (visited.has(currentId)) break;
+    visited.add(currentId);
+
+    const { rows } = await db.query<{ parent_receipt_id: string | null }>(
+      'SELECT parent_receipt_id FROM receipts WHERE id = $1',
+      [currentId]
+    );
+    if (rows.length === 0 || !rows[0].parent_receipt_id) break;
+    depth++;
+    currentId = rows[0].parent_receipt_id;
+  }
+
+  return depth;
 }
 
 // --- Multi-party approval ---

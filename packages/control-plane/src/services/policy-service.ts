@@ -103,6 +103,28 @@ export async function getActivePolicy(
   return rows[0]?.policy ?? null;
 }
 
+export async function getPolicyById(
+  orgId: string,
+  environment: string,
+  policyId: string,
+  version?: string
+): Promise<Policy | null> {
+  if (version) {
+    const { rows } = await db.query<{ policy: Policy }>(
+      `SELECT policy FROM policies WHERE org_id = $1 AND environment = $2 AND policy_id = $3 AND version = $4`,
+      [orgId, environment, policyId, version]
+    );
+    return rows[0]?.policy ?? null;
+  }
+
+  // Latest version
+  const { rows } = await db.query<{ policy: Policy }>(
+    `SELECT policy FROM policies WHERE org_id = $1 AND environment = $2 AND policy_id = $3 ORDER BY created_at DESC LIMIT 1`,
+    [orgId, environment, policyId]
+  );
+  return rows[0]?.policy ?? null;
+}
+
 export async function listPolicies(
   orgId: string,
   environment: string
