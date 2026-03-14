@@ -37,5 +37,14 @@
     "engine",
     "policy"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/engine"
+  },
+  "homepage": "https://github.com/authensor/authensor",
+  "publishConfig": {
+    "access": "public"
+  }
 }

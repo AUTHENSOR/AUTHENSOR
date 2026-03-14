@@ -21,16 +21,26 @@
   ],
   "scripts": {
     "build": "echo 'Schemas are static JSON - no build needed'",
-    "test": "ajv validate -s src/action-envelope.schema.json -d test/fixtures/*.envelope.json",
-    "lint": "ajv compile -s src/*.schema.json"
+    "test": "ajv validate -s src/action-envelope.schema.json -d test/fixtures/*.envelope.json --spec=draft7 --strict=false",
+    "lint": "ajv compile -s src/*.schema.json --spec=draft7 --strict=false"
   },
   "devDependencies": {
-    "ajv-cli": "^5.0.0"
+    "ajv-cli": "^5.0.0",
+    "ajv-formats": "^3.0.1"
   },
   "keywords": [
     "authensor",
     "schemas",
     "json-schema"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/schemas"
+  },
+  "homepage": "https://github.com/authensor/authensor",
+  "publishConfig": {
+    "access": "public"
+  }
 }

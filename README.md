@@ -36,8 +36,8 @@ Authensor is three open-source tools that together cover the full surface area o
 | Tool | What it guards | How |
 |------|---------------|-----|
 | **Authensor** | Agent actions (API calls, tool use, data access) | Policy-first evaluation engine + control plane with receipts |
-| **[SpiroGrapher](https://github.com/AUTHENSOR/SpiroGrapher)** | Agent web browsing | Compiles HTML to structured IR, detects dark patterns, constitutional rules |
-| **[SafeClaw](SafeClaw/)** | Local agent execution | PreToolUse hook gating, deny-by-default, mobile approval workflows |
+| **[SpiroGrapher](https://github.com/authensor/spirographer)** | Agent web browsing | Compiles HTML to structured IR, detects dark patterns, constitutional rules |
+| **[SafeClaw](https://github.com/authensor/safeclaw)** | Local agent execution | PreToolUse hook gating, deny-by-default, mobile approval workflows |
 
 ## Quickstart
 
