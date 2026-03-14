@@ -1,0 +1,63 @@
+{
+  "name": "@authensor/redteam",
+  "version": "0.0.1",
+  "description": "Adversarial red-team test seeds for AI agent safety evaluation — 15 attack patterns across 5 categories mapped to MITRE ATLAS",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0",
+    "@types/node": "^20.10.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "keywords": [
+    "authensor",
+    "redteam",
+    "red-team",
+    "adversarial-testing",
+    "ai-safety",
+    "agent-safety",
+    "prompt-injection",
+    "social-engineering",
+    "privilege-escalation",
+    "insider-threat",
+    "mitre-atlas",
+    "owasp",
+    "agent-evaluation",
+    "alignment-testing",
+    "petri",
+    "agentic-ai",
+    "guardrails",
+    "security-testing"
+  ],
+  "author": {
+    "name": "John Kearney",
+    "url": "https://github.com/jkearney"
+  },
+  "bugs": {
+    "url": "https://github.com/authensor/authensor/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/redteam"
+  },
+  "homepage": "https://authensor.com",
+  "publishConfig": { "access": "public" }
+}
