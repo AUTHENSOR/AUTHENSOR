@@ -1,225 +1,453 @@
-# Authensor + Claude Code / Cursor IDE
+# Authensor + Claude Code / Cursor Integration
 
-Policy enforcement, approval workflows, and a tamper-proof audit trail for every action your AI coding assistant takes.
+Authensor evaluates every tool call your AI coding agent makes -- file writes, shell
+commands, network requests, MCP actions -- against your policies **before** the tool
+executes. If the policy says deny, the tool never runs. If it says require approval,
+the agent pauses until you approve. Read-only operations pass through instantly with
+no network call.
 
-## Overview
+This guide covers three integration paths:
 
-Authensor sits between your AI agent (Claude Code, Cursor, or any MCP-compatible client) and the tools it calls. Every tool invocation is:
-
-1. **Evaluated** against your policy (allow / deny / require_approval)
-2. **Recorded** as an immutable receipt with full parameters and result
-3. **Gated** by optional multi-party approval before execution
-
-The control plane exposes a standard REST API. The MCP gateway speaks the Model Context Protocol so it drops into Claude Code and Cursor as a transparent proxy.
-
-```
-┌──────────────┐     MCP (stdio)     ┌──────────────────┐     HTTP     ┌─────────────────┐
-│  Claude Code │ ──────────────────>  │  Authensor MCP   │ ──────────> │  Control Plane   │
-│  / Cursor    │                      │  Gateway         │             │  (policy engine) │
-└──────────────┘                      └────────┬─────────┘             └─────────────────┘
-                                               │ MCP (stdio)
-                                      ┌────────▼─────────┐
-                                      │  Upstream MCP    │
-                                      │  Server (any)    │
-                                      └──────────────────┘
-```
+| Path | Best for |
+|------|----------|
+| **SafeClaw** (recommended) | Full dashboard, audit trail, SMS/webhook alerts, offline cache |
+| **Direct hook script** | Lightweight, no extra dependencies, BYOD (bring your own dashboard) |
+| **Cursor** | Same Authensor backend, different hook wiring |
 
 ---
 
 ## 1. Quick Setup with SafeClaw
 
-SafeClaw is the fastest way to try Authensor locally. It bundles a policy-gated AI agent that evaluates every action before executing it.
+SafeClaw is the open-source client for Authensor. It wraps the Claude Agent SDK,
+intercepts every `PreToolUse` event, and gates execution through the Authensor
+control plane.
+
+### Install and initialize
 
 ```bash
-# Install and initialize with demo credentials
-npx safeclaw init --demo
-
-# Run a task — every tool call goes through policy evaluation
-npx safeclaw run "list my files"
+npx @authensor/safeclaw
 ```
 
-Check what happened:
+Your browser opens with a setup wizard. Or initialize from the CLI:
 
 ```bash
-# View receipts (every action the agent attempted)
-safeclaw receipts
-
-# View pending approvals
-safeclaw approvals
-
-# Approve a pending action
-safeclaw approvals approve <receipt-id>
+safeclaw init --demo
 ```
 
-SafeClaw supports both Anthropic and OpenAI providers:
+This does three things:
+
+1. Creates a profile at `~/.safeclaw/config.json` with a unique install ID.
+2. Provisions a free demo Authensor token (7-day expiry).
+3. Applies the default deny-by-default policy.
+
+### How the hook works
+
+Every tool call flows through `gateway.js`, SafeClaw's PreToolUse hook:
+
+```
+Agent wants to call a tool (e.g., Bash with "rm -rf /tmp/old")
+  |
+  v
+classifier.js maps it --> action type: "code.exec", resource: "rm -rf /tmp/old"
+  |
+  v
+Is it a safe read? (Read, Glob, Grep, TodoWrite, Skill, etc.)
+  YES --> allow locally, no network call
+  NO  --> send action metadata to POST /evaluate on Authensor
+           |
+           v
+        Authensor evaluates against your active policy
+           |
+           +--> "allow"            --> tool executes
+           +--> "deny"             --> tool blocked, agent told why
+           +--> "require_approval" --> agent pauses, you get notified
+                                       (SMS, webhook, dashboard, CLI)
+                                       approve/reject via any channel
+```
+
+**What leaves your machine:** Only `action.type` and `action.resource` (with secrets
+redacted). Never your API keys, file contents, or conversation.
+
+**What stays local:** Your `ANTHROPIC_API_KEY`, your files, all tool output, the full
+conversation.
+
+### Run a task
 
 ```bash
-# OpenAI
-safeclaw init --provider openai --auth-token <token>
-export OPENAI_API_KEY=sk-...
-safeclaw run "refactor the utils module"
+safeclaw run "Refactor the auth module to use JWT"
 ```
 
-### Dry Run
-
-Preview what a policy would do without starting the agent:
+Read operations execute immediately. Everything else is checked against your policy.
+Risky actions pause until you approve:
 
 ```bash
-safeclaw run --dry-run "deploy to production"
+# In another terminal, or from the dashboard:
+safeclaw approvals approve rcpt_abc123
 ```
 
-This prints the policy simulation for common action types (`filesystem.write`, `safe.read.file`, `network.http`, `code.exec`) and exits.
+### Useful commands
+
+```bash
+safeclaw health          # Verify Authensor connectivity
+safeclaw policy show     # View your active policy
+safeclaw receipts        # View audit trail
+safeclaw audit verify    # Verify hash chain integrity
+safeclaw doctor          # Run 10 diagnostic checks
+```
 
 ---
 
-## 2. MCP Server Integration
+## 2. Direct Claude Code Hook Setup (Without SafeClaw)
 
-The Authensor MCP Gateway is a transparent proxy. It sits in front of any upstream MCP server, intercepts every `tools/call`, evaluates it against your policies, and forwards allowed calls to the upstream.
+If you want Authensor policy enforcement directly inside Claude Code without the
+SafeClaw wrapper, you can wire up a `PreToolUse` hook using Claude Code's native
+hooks system.
 
-### Claude Code
+### Step 1: Create the hook script
 
-Add to `~/.claude/settings.json` (or your project's `.claude/settings.json`):
+Save this as `~/.claude/hooks/authensor-gate.sh` and make it executable:
+
+```bash
+#!/usr/bin/env bash
+# Authensor PreToolUse gate for Claude Code
+# Reads tool call JSON from stdin, evaluates against Authensor, outputs decision.
+
+set -euo pipefail
+
+AUTHENSOR_URL="${AUTHENSOR_URL:-https://authensor-api-production.up.railway.app}"
+AUTHENSOR_TOKEN="${AUTHENSOR_TOKEN:-}"
+
+# Read the hook input from stdin (Claude Code sends JSON)
+INPUT=$(cat)
+
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
+TOOL_INPUT=$(echo "$INPUT" | jq -c '.tool_input // {}')
+
+# --- Classify the tool into an Authensor action type ---
+classify_tool() {
+  case "$1" in
+    Read)           echo "safe.read.file" ;;
+    Glob)           echo "safe.read.glob" ;;
+    Grep)           echo "safe.read.grep" ;;
+    TodoWrite)      echo "safe.read.meta" ;;
+    Skill)          echo "safe.read.meta" ;;
+    TaskOutput)     echo "safe.read.meta" ;;
+    Write)          echo "filesystem.write" ;;
+    Edit)           echo "filesystem.write" ;;
+    NotebookEdit)   echo "filesystem.write" ;;
+    Bash)           echo "code.exec" ;;
+    WebFetch)       echo "network.http" ;;
+    WebSearch)      echo "network.search" ;;
+    Task)           echo "agent.subagent" ;;
+    mcp__*)         echo "mcp.${1#mcp__}" ;;
+    *)              echo "unknown.$1" ;;
+  esac
+}
+
+# Extract the resource (file path, command, URL, etc.)
+extract_resource() {
+  echo "$TOOL_INPUT" | jq -r '
+    .file_path // .command // .url // .pattern // .query // .skill // ""
+  ' | head -c 200
+}
+
+ACTION_TYPE=$(classify_tool "$TOOL_NAME")
+RESOURCE=$(extract_resource)
+
+# --- Local pre-filter: safe reads skip the network entirely ---
+if [[ "$ACTION_TYPE" == safe.read.* ]]; then
+  # Output nothing -- empty stdout means "allow" in Claude Code hooks
+  exit 0
+fi
+
+# --- Call Authensor /evaluate ---
+ENVELOPE=$(jq -n \
+  --arg action_type "$ACTION_TYPE" \
+  --arg resource "$RESOURCE" \
+  --arg principal_id "claude-code-$(whoami)" \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{
+    action: { type: $action_type, resource: $resource },
+    principal: { type: "agent", id: $principal_id },
+    timestamp: $timestamp
+  }')
+
+RESPONSE=$(curl -s -w '\n%{http_code}' \
+  -X POST "${AUTHENSOR_URL}/evaluate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${AUTHENSOR_TOKEN}" \
+  -d "$ENVELOPE" \
+  --max-time 10 2>/dev/null) || {
+    # Fail closed: if Authensor is unreachable, deny
+    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Authensor control plane unreachable (fail-closed)"}}'
+    exit 0
+}
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+if [[ "$HTTP_CODE" -ge 400 ]]; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Authensor returned HTTP '"$HTTP_CODE"'"}}'
+  exit 0
+fi
+
+OUTCOME=$(echo "$BODY" | jq -r '.decision.outcome // .outcome // "deny"')
+RECEIPT_ID=$(echo "$BODY" | jq -r '.receiptId // .id // "unknown"')
+
+case "$OUTCOME" in
+  allow|allowed)
+    # Allow -- output nothing (empty = allow)
+    exit 0
+    ;;
+  deny|denied)
+    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Denied by Authensor policy (receipt: '"$RECEIPT_ID"')"}}'
+    exit 0
+    ;;
+  require_approval)
+    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Approval required. Approve at: '"${AUTHENSOR_URL}/receipts/${RECEIPT_ID}/view"'"}}'
+    exit 0
+    ;;
+  *)
+    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Unknown decision: '"$OUTCOME"'"}}'
+    exit 0
+    ;;
+esac
+```
+
+```bash
+chmod +x ~/.claude/hooks/authensor-gate.sh
+```
+
+### Step 2: Configure hooks.json
+
+Create or edit `.claude/hooks.json` in your project root (or `~/.claude/hooks.json`
+for global enforcement):
 
 ```json
 {
-  "mcpServers": {
-    "authensor": {
-      "command": "npx",
-      "args": ["authensor-mcp-gateway"],
-      "env": {
-        "CONTROL_PLANE_URL": "http://localhost:3000",
-        "AUTHENSOR_API_KEY": "your-api-key",
-        "UPSTREAM_COMMAND": "npx @modelcontextprotocol/server-filesystem /home/user/projects"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "~/.claude/hooks/authensor-gate.sh"
       }
-    }
+    ]
   }
 }
 ```
 
-### Cursor IDE
+### Step 3: Set your Authensor token
 
-Open **Settings > MCP** and add a new server with the same configuration:
+```bash
+export AUTHENSOR_URL="https://authensor-api-production.up.railway.app"
+export AUTHENSOR_TOKEN="authensor_demo_..."
+```
+
+Request a demo token at: https://forms.gle/QdfeWAr2G4pc8GxQA
+
+### Hook input/output format
+
+**Input** (JSON on stdin from Claude Code):
 
 ```json
 {
-  "mcpServers": {
-    "authensor-filesystem": {
-      "command": "npx",
-      "args": ["authensor-mcp-gateway"],
-      "env": {
-        "CONTROL_PLANE_URL": "http://localhost:3000",
-        "AUTHENSOR_API_KEY": "your-api-key",
-        "UPSTREAM_COMMAND": "npx @modelcontextprotocol/server-filesystem /home/user/projects"
-      }
-    }
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git push origin main"
   }
 }
 ```
 
-### How It Works
-
-1. The gateway spawns the upstream MCP server as a child process
-2. It lists the upstream's tools and re-exposes them as its own
-3. On every `tools/call`, it creates an action envelope and sends it to `POST /evaluate`
-4. If the decision is `allow`, the call is forwarded to the upstream server
-5. If the decision is `deny`, the agent receives an error with the reason
-6. If the decision is `require_approval`, the call blocks until approved via the dashboard or CLI
-7. A receipt is recorded for every call (allowed, denied, or pending)
-
-### Environment Variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `CONTROL_PLANE_URL` | Yes | URL of the Authensor control plane |
-| `UPSTREAM_COMMAND` | Yes | Command to spawn the upstream MCP server |
-| `AUTHENSOR_API_KEY` | No | API key for control plane authentication |
-| `AUTHENSOR_PRINCIPAL_ID` | No | Principal ID for policy evaluation (default: `mcp-gateway`) |
-
-### Multiple Upstream Servers
-
-Register one gateway per upstream server. Each gets its own policy namespace:
+**Output to deny** (JSON on stdout):
 
 ```json
 {
-  "mcpServers": {
-    "authensor-fs": {
-      "command": "npx",
-      "args": ["authensor-mcp-gateway"],
-      "env": {
-        "CONTROL_PLANE_URL": "http://localhost:3000",
-        "AUTHENSOR_API_KEY": "your-api-key",
-        "UPSTREAM_COMMAND": "npx @modelcontextprotocol/server-filesystem /home/user/projects"
-      }
-    },
-    "authensor-github": {
-      "command": "npx",
-      "args": ["authensor-mcp-gateway"],
-      "env": {
-        "CONTROL_PLANE_URL": "http://localhost:3000",
-        "AUTHENSOR_API_KEY": "your-api-key",
-        "UPSTREAM_COMMAND": "npx @modelcontextprotocol/server-github"
-      }
-    }
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Denied by Authensor policy (receipt: rcpt_abc123)"
   }
 }
 ```
 
-Tool calls are namespaced as `mcp.<tool_name>` in the policy engine, so you can write rules that target specific tools across servers.
+**Output to allow:** Empty stdout (exit 0 with no output).
 
 ---
 
-## 3. Policy Examples
+## 3. Cursor Integration
 
-Policies are JSON documents with ordered rules. First match wins. If no rule matches, `defaultEffect` applies.
+Cursor does not currently support the same `PreToolUse` hook mechanism that Claude
+Code uses. There are two practical approaches:
 
-### Coding Assistant: Read-Freely, Gate Writes
+### Option A: Wrap commands through a gated shell
+
+Create a wrapper script that intercepts shell commands and checks them against
+Authensor before execution. Set this as your default shell in Cursor's terminal
+settings:
+
+1. Save the hook script from Section 2 as `~/.authensor/gate.sh`.
+2. In Cursor settings, set the terminal shell to a wrapper:
+
+```bash
+#!/usr/bin/env bash
+# ~/.authensor/cursor-shell.sh
+# Wraps every command through Authensor evaluation
+
+AUTHENSOR_URL="${AUTHENSOR_URL:-https://authensor-api-production.up.railway.app}"
+AUTHENSOR_TOKEN="${AUTHENSOR_TOKEN:-}"
+
+# If run interactively, just exec bash
+if [[ $# -eq 0 ]]; then
+  exec /bin/bash
+fi
+
+# Build the envelope
+COMMAND="$*"
+ENVELOPE=$(jq -n \
+  --arg cmd "$COMMAND" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{
+    action: { type: "code.exec", resource: $cmd },
+    principal: { type: "agent", id: "cursor" },
+    timestamp: $ts
+  }')
+
+RESULT=$(curl -s -X POST "${AUTHENSOR_URL}/evaluate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${AUTHENSOR_TOKEN}" \
+  -d "$ENVELOPE" --max-time 10 2>/dev/null)
+
+OUTCOME=$(echo "$RESULT" | jq -r '.decision.outcome // "deny"' 2>/dev/null)
+
+if [[ "$OUTCOME" == "allow" || "$OUTCOME" == "allowed" ]]; then
+  exec /bin/bash -c "$COMMAND"
+else
+  echo "[Authensor] Blocked: $OUTCOME" >&2
+  exit 1
+fi
+```
+
+### Option B: Use SafeClaw as the agent runner
+
+Instead of using Cursor's built-in agent, run tasks through SafeClaw directly:
+
+```bash
+safeclaw run "Fix the failing tests in src/auth/"
+```
+
+This gives you full policy enforcement, the approval flow, audit trail, and
+dashboard -- regardless of which editor you use.
+
+### Option C: Cursor rules file
+
+You can add an `.cursor/rules` file that instructs the Cursor agent to self-check
+against Authensor before executing tools. This is advisory (the agent can ignore it)
+but adds a layer of friction:
+
+```
+Before executing any file write, shell command, or network request, call the
+Authensor evaluate endpoint to check if the action is permitted:
+
+  POST https://authensor-api-production.up.railway.app/evaluate
+  Authorization: Bearer $AUTHENSOR_TOKEN
+  Body: { "action": { "type": "<action_type>", "resource": "<resource>" },
+          "principal": { "type": "agent", "id": "cursor" } }
+
+If the response outcome is "deny" or "require_approval", do not execute the action.
+Inform the user of the decision and the receipt URL.
+```
+
+> Note: Option C is not a security boundary -- it relies on the model following
+> instructions. Options A and B provide deterministic enforcement.
+
+---
+
+## 4. Policy Examples
+
+Policies are JSON documents with a `defaultEffect` and an ordered list of rules.
+First matching rule wins. If no rule matches, the `defaultEffect` applies.
+
+### Example 1: Allow reads, require approval for writes
 
 ```json
 {
-  "id": "coding-assistant",
-  "name": "Coding Assistant Policy",
+  "id": "read-free-write-gated",
   "version": "v1",
+  "name": "Read Free, Write Gated",
   "defaultEffect": "deny",
   "rules": [
     {
       "id": "allow-reads",
       "effect": "allow",
-      "description": "Allow all read-only operations",
+      "description": "All read operations pass through instantly",
       "condition": {
         "any": [
-          { "field": "action.type", "operator": "startsWith", "value": "safe.read" },
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.read" },
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.list" },
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.search" },
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.get" }
+          { "field": "action.type", "operator": "startsWith", "value": "safe.read" }
         ]
       }
     },
     {
       "id": "approve-writes",
       "effect": "require_approval",
-      "description": "Require approval for file writes",
+      "description": "File writes and code execution require human approval",
       "condition": {
         "any": [
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.write" },
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.create" },
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.edit" },
-          { "field": "action.type", "operator": "startsWith", "value": "filesystem." }
+          { "field": "action.type", "operator": "startsWith", "value": "filesystem." },
+          { "field": "action.type", "operator": "startsWith", "value": "code." }
+        ]
+      }
+    }
+  ]
+}
+```
+
+### Example 2: Block file operations outside the project directory
+
+```json
+{
+  "id": "project-boundary",
+  "version": "v1",
+  "name": "Project Boundary Enforcement",
+  "defaultEffect": "deny",
+  "rules": [
+    {
+      "id": "allow-reads",
+      "effect": "allow",
+      "condition": {
+        "any": [
+          { "field": "action.type", "operator": "startsWith", "value": "safe.read" }
         ]
       }
     },
     {
-      "id": "block-destructive",
+      "id": "deny-outside-project",
       "effect": "deny",
-      "description": "Block destructive shell commands",
+      "description": "Block writes outside the project tree",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "filesystem.write" },
+          { "field": "action.resource", "operator": "matches", "value": "^(?!/Users/me/projects/myapp)" }
+        ]
+      }
+    },
+    {
+      "id": "allow-project-writes",
+      "effect": "allow",
+      "description": "Allow writes inside the project",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "filesystem.write" },
+          { "field": "action.resource", "operator": "startsWith", "value": "/Users/me/projects/myapp" }
+        ]
+      }
+    },
+    {
+      "id": "approve-exec",
+      "effect": "require_approval",
+      "description": "Shell commands need approval",
       "condition": {
         "any": [
-          { "field": "action.resource", "operator": "contains", "value": "rm -rf" },
-          { "field": "action.resource", "operator": "contains", "value": "DROP TABLE" },
-          { "field": "action.resource", "operator": "contains", "value": "DROP DATABASE" },
-          { "field": "action.resource", "operator": "contains", "value": "chmod 777" },
-          { "field": "action.resource", "operator": "contains", "value": "> /dev/" },
-          { "field": "action.resource", "operator": "contains", "value": "mkfs" }
+          { "field": "action.type", "operator": "eq", "value": "code.exec" }
         ]
       }
     }
@@ -227,285 +455,201 @@ Policies are JSON documents with ordered rules. First match wins. If no rule mat
 }
 ```
 
-### Rate Limiting API Calls
+> Tip: SafeClaw also has built-in workspace scoping (`safeclaw init --workspace`)
+> that enforces project boundaries at the client level before the policy is even
+> consulted.
 
-Rules can include a `rateLimit` field to cap how many times an action can be invoked per time window:
+### Example 3: Rate-limit API calls
+
+Rate limiting is configured at the control plane level, not in the policy JSON.
+The SafeClaw client also supports local rate limiting via `settings.json`:
 
 ```json
 {
-  "id": "rate-limited-api",
-  "name": "Rate Limited API Access",
+  "rateLimitPerMinute": 30,
+  "rateLimitBurst": 5
+}
+```
+
+For server-side rate limits, the Authensor control plane enforces sliding-window
+limits on all write endpoints. Contact your Authensor admin to adjust per-tenant
+limits.
+
+### Example 4: Require approval for any git push
+
+```json
+{
+  "id": "safe-git",
   "version": "v1",
+  "name": "Safe Git Operations",
   "defaultEffect": "deny",
   "rules": [
     {
-      "id": "allow-api-with-limit",
+      "id": "allow-reads",
       "effect": "allow",
-      "description": "Allow API calls, max 30 per minute",
       "condition": {
         "any": [
-          { "field": "action.type", "operator": "startsWith", "value": "mcp.http" },
+          { "field": "action.type", "operator": "startsWith", "value": "safe.read" }
+        ]
+      }
+    },
+    {
+      "id": "approve-git-push",
+      "effect": "require_approval",
+      "description": "Any git push requires human approval",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "code.exec" },
+          { "field": "action.resource", "operator": "contains", "value": "git push" }
+        ]
+      }
+    },
+    {
+      "id": "allow-safe-git",
+      "effect": "allow",
+      "description": "Non-destructive git commands are fine",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "code.exec" },
+          { "field": "action.resource", "operator": "matches", "value": "^git (status|log|diff|branch|fetch|stash list)" }
+        ]
+      }
+    },
+    {
+      "id": "approve-other-exec",
+      "effect": "require_approval",
+      "description": "All other shell commands need approval",
+      "condition": {
+        "any": [
+          { "field": "action.type", "operator": "eq", "value": "code.exec" }
+        ]
+      }
+    },
+    {
+      "id": "approve-writes",
+      "effect": "require_approval",
+      "condition": {
+        "any": [
+          { "field": "action.type", "operator": "startsWith", "value": "filesystem." },
           { "field": "action.type", "operator": "startsWith", "value": "network." }
         ]
-      },
-      "rateLimit": {
-        "requests": 30,
-        "window": "1m",
-        "scope": "principal"
       }
     }
   ]
 }
 ```
 
-Rate limit scopes:
-- `principal` -- per-agent/user
-- `action` -- per-action-type
-- `global` -- across all principals
+### Applying a policy
 
-### Multi-Party Approval for High-Risk Actions
-
-Require multiple approvers before a sensitive action executes:
-
-```json
-{
-  "id": "approve-production-deploys",
-  "effect": "require_approval",
-  "description": "Two approvals required for production deployments",
-  "condition": {
-    "any": [
-      { "field": "action.type", "operator": "eq", "value": "mcp.deploy" },
-      { "field": "action.type", "operator": "startsWith", "value": "payments." }
-    ]
-  },
-  "approvalConfig": {
-    "requiredApprovals": 2,
-    "expiresIn": "30m",
-    "approvers": [
-      { "type": "role", "id": "tech-lead" },
-      { "type": "role", "id": "sre" }
-    ]
-  }
-}
-```
-
-### Applying a Policy
-
-Via SafeClaw CLI:
+With SafeClaw:
 
 ```bash
-# Edit the policy file (created during init)
-vim ~/.safeclaw/policies/default.json
-
-# Push to control plane and activate
+# Copy your policy to the active location
+cp my-policy.json ~/.safeclaw/policies/default.json
 safeclaw policy apply
 ```
 
-Via the REST API directly:
+With the direct hook: upload the policy to the Authensor control plane using the API:
 
 ```bash
-# Create the policy
-curl -X POST http://localhost:3000/policies \
-  -H "Authorization: Bearer $AUTHENSOR_API_KEY" \
+curl -X POST "${AUTHENSOR_URL}/policies" \
+  -H "Authorization: Bearer ${AUTHENSOR_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d @policy.json
-
-# Activate it
-curl -X POST http://localhost:3000/policies/active \
-  -H "Authorization: Bearer $AUTHENSOR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"policy_id": "coding-assistant", "version": "v1"}'
+  -d @my-policy.json
 ```
 
 ---
 
-## 4. Approval Workflows
+## 5. Viewing the Audit Trail
 
-When a policy rule returns `require_approval`, the action is parked until a human signs off.
+Every tool call that passes through Authensor produces a receipt -- a tamper-evident
+record of what was attempted, what the policy decided, and whether it was approved.
 
-### Dashboard
+### Browser view
 
-The control plane serves an HTMX-powered admin dashboard at `/dashboard`. Open `http://localhost:3000/dashboard` to:
+Open the receipts dashboard in your browser:
 
-- View all pending approval requests
-- Inspect the full action envelope (what the agent wants to do, with all parameters)
-- Approve or reject with one click
-- Review the full receipt history and audit trail
-
-### CLI
-
-```bash
-# List pending approvals
-safeclaw approvals
-
-# Approve
-safeclaw approvals approve <receipt-id>
-
-# Reject
-safeclaw approvals reject <receipt-id>
+```
+https://authensor-api-production.up.railway.app/receipts/view
 ```
 
-### REST API
+You will need your admin token as a query parameter or `Authorization` header.
+Each receipt shows:
+
+- Timestamp
+- Tool / action type (e.g., `code.exec`, `filesystem.write`)
+- Resource (e.g., the command or file path, with secrets redacted)
+- Decision outcome (`allow`, `deny`, `require_approval`)
+- Approval status (if applicable)
+- Policy that was evaluated
+
+Click any receipt to see the full envelope, decision details, and execution result.
+
+### CLI (SafeClaw)
 
 ```bash
-# Get approval status (includes all responses for multi-party)
-curl http://localhost:3000/approvals/<receipt-id> \
-  -H "Authorization: Bearer $AUTHENSOR_API_KEY"
-
-# Submit an approval response (multi-party)
-curl -X POST http://localhost:3000/approvals/<receipt-id>/respond \
-  -H "Authorization: Bearer $AUTHENSOR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "responderId": "alice@company.com",
-    "responderName": "Alice",
-    "decision": "approve",
-    "comment": "Looks good"
-  }'
+safeclaw receipts            # List recent receipts
+safeclaw audit               # View local audit log (hash-chained JSONL)
+safeclaw audit verify        # Verify the hash chain has not been tampered with
 ```
 
-For multi-party approval, the action executes only after the required number of `approve` responses are collected (quorum). If any responder rejects, the action is cancelled.
-
-### SMS Notifications (Optional)
-
-Set these environment variables to get texted when approval is needed:
+### API
 
 ```bash
-export TWILIO_ACCOUNT_SID=AC...
-export TWILIO_AUTH_TOKEN=...
-export TWILIO_FROM_NUMBER=+1...
-export SAFECLAW_NOTIFY_PHONE=+1...
+# List receipts
+curl -s "${AUTHENSOR_URL}/receipts?limit=20" \
+  -H "Authorization: Bearer ${AUTHENSOR_TOKEN}" | jq
+
+# Export as NDJSON
+curl -s "${AUTHENSOR_URL}/receipts/export" \
+  -H "Authorization: Bearer ${AUTHENSOR_TOKEN}" > receipts.ndjson
+
+# Verify hash chain integrity
+curl -s "${AUTHENSOR_URL}/receipts/verify" \
+  -H "Authorization: Bearer ${AUTHENSOR_TOKEN}" | jq
 ```
+
+### Local audit log (SafeClaw)
+
+SafeClaw also maintains a local append-only audit ledger at `~/.safeclaw/audit.jsonl`.
+Each entry is SHA-256 hash-chained to the previous entry. This provides a local
+tamper-detection layer independent of the control plane.
 
 ---
 
-## 5. Self-Hosted Setup
+## Action Type Reference
 
-Run the full control plane locally with Docker Compose:
+When writing policies, these are the action types produced by the classifier:
 
-```bash
-git clone https://github.com/authensor/authensor.git
-cd authensor
-
-# Start PostgreSQL + Control Plane + MCP Server
-docker compose up -d
-```
-
-This starts:
-
-| Service | Port | Description |
-|---|---|---|
-| `authensor-postgres` | 5432 | PostgreSQL 16 for receipts and policy storage |
-| `authensor-control-plane` | 3000 | Policy evaluation API + admin dashboard |
-| `authensor-mcp-server` | 3001 | MCP server with Stripe, GitHub, and HTTP tools |
-
-### Bootstrap an API Key
-
-On first run, set `AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN` to auto-create an admin key:
-
-```bash
-AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN=my-bootstrap-secret docker compose up -d
-```
-
-The admin API key is printed to the control plane's stdout. Retrieve it with:
-
-```bash
-docker logs authensor-control-plane 2>&1 | grep "API key"
-```
-
-Then use it for all subsequent API calls and MCP gateway configuration.
-
-### Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `POSTGRES_USER` | `authensor` | Database user |
-| `POSTGRES_PASSWORD` | `authensor_dev` | Database password |
-| `POSTGRES_DB` | `authensor` | Database name |
-| `AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN` | (none) | Set on first run to create admin key |
-| `AUTHENSOR_ALLOW_FALLBACK_POLICY` | `false` | If `true`, allow-all when no policy is configured. **Keep `false` in production** (fail-closed). |
-| `AUTHENSOR_SANDBOX_MODE` | `real` | Set to `stub` for dry-run testing without real API calls |
-| `AUTHENSOR_RL_INGEST_PER_MIN` | `120` | Rate limit for ingest (evaluate) requests |
-| `AUTHENSOR_RL_ADMIN_PER_MIN` | `120` | Rate limit for admin requests |
-
-### Point the MCP Gateway at Your Self-Hosted Instance
-
-```json
-{
-  "mcpServers": {
-    "authensor": {
-      "command": "npx",
-      "args": ["authensor-mcp-gateway"],
-      "env": {
-        "CONTROL_PLANE_URL": "http://localhost:3000",
-        "AUTHENSOR_API_KEY": "your-admin-key-from-bootstrap",
-        "UPSTREAM_COMMAND": "npx @modelcontextprotocol/server-filesystem /home/user/projects"
-      }
-    }
-  }
-}
-```
+| Tool | Action Type | Category |
+|------|------------|----------|
+| `Read` | `safe.read.file` | Local pre-filter (no network call) |
+| `Glob` | `safe.read.glob` | Local pre-filter |
+| `Grep` | `safe.read.grep` | Local pre-filter |
+| `TodoWrite` | `safe.read.meta` | Local pre-filter |
+| `Skill` | `safe.read.meta` | Local pre-filter |
+| `TaskOutput` | `safe.read.meta` | Local pre-filter |
+| `Write` | `filesystem.write` | Evaluated by Authensor |
+| `Edit` | `filesystem.write` | Evaluated by Authensor |
+| `NotebookEdit` | `filesystem.write` | Evaluated by Authensor |
+| `Bash` | `code.exec` | Evaluated by Authensor |
+| `WebFetch` | `network.http` | Evaluated by Authensor |
+| `WebSearch` | `network.search` | Evaluated by Authensor |
+| `Task` | `agent.subagent` | Evaluated by Authensor |
+| `mcp__*` | `mcp.<server>.<action>` | Evaluated by Authensor |
 
 ---
 
-## 6. Verifying It Works
+## Fail-Closed Guarantee
 
-### Check Connectivity
+Both SafeClaw and the direct hook script follow the same safety contract:
 
-```bash
-curl http://localhost:3000/health
-# {"status":"ok"}
+- If the Authensor control plane is unreachable, **all non-read actions are denied**.
+- Deny decisions are never cached. Only allow decisions can be cached for offline
+  resilience (SafeClaw only, opt-in via `settings.json`).
+- If no policy is configured on the control plane, the default behavior is to deny
+  (unless the admin has explicitly enabled the fallback allow-all policy).
 
-# Verify your API key
-curl http://localhost:3000/whoami \
-  -H "Authorization: Bearer $AUTHENSOR_API_KEY"
-# {"keyId":"...","role":"admin","name":"..."}
-```
-
-### Inspect Receipts
-
-Every tool call creates a receipt, whether it was allowed, denied, or pending approval:
-
-```bash
-# List recent receipts
-curl http://localhost:3000/receipts \
-  -H "Authorization: Bearer $AUTHENSOR_API_KEY"
-```
-
-Each receipt includes:
-- The full action envelope (type, resource, parameters, principal)
-- The policy decision and which rule matched
-- Execution status, duration, and result (if allowed and executed)
-- Approval responses (if multi-party)
-
-### Audit Trail with SafeClaw
-
-SafeClaw maintains a local hash-chained audit log. Verify its integrity:
-
-```bash
-safeclaw audit             # View recent entries
-safeclaw audit verify      # Verify hash chain integrity
-```
-
----
-
-## API Quick Reference
-
-| Endpoint | Method | Role | Description |
-|---|---|---|---|
-| `/health` | GET | public | Health check |
-| `/evaluate` | POST | ingest, admin | Evaluate an action against policies |
-| `/receipts` | GET | admin | List receipts |
-| `/receipts/:id` | GET | admin | Get receipt detail |
-| `/receipts/:id/claim` | POST | executor, admin | Claim a receipt for execution |
-| `/receipts/:id` | PATCH | executor, admin | Update receipt after execution |
-| `/policies` | GET | admin | List policies |
-| `/policies` | POST | admin | Create a policy |
-| `/policies/active` | GET | admin | Get active policy |
-| `/policies/active` | POST | admin | Set active policy |
-| `/approvals/:id` | GET | admin | Get approval status |
-| `/approvals/:id/respond` | POST | admin | Submit approval response |
-| `/keys` | * | admin | Manage API keys |
-| `/metrics` | GET | admin | Prometheus-compatible metrics |
-| `/dashboard` | GET | admin | Admin UI |
-| `/whoami` | GET | any | Debug auth context |
+This means an attacker cannot bypass Authensor by taking the control plane offline.
+The worst case is that the agent stops making progress -- it never gains unauthorized
+access.
