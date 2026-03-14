@@ -7,13 +7,31 @@
 --
 -- These constraints provide defense-in-depth for the atomic claim logic.
 
--- Constraint: claim_id requires claim_expires_at
-ALTER TABLE receipts ADD CONSTRAINT claim_requires_expiry
-  CHECK (claim_id IS NULL OR claim_expires_at IS NOT NULL);
+-- Constraint: claim_id requires claim_expires_at (idempotent, safe on retries)
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.receipts ADD CONSTRAINT claim_requires_expiry
+      CHECK (claim_id IS NULL OR claim_expires_at IS NOT NULL);
+  EXCEPTION
+    WHEN duplicate_object THEN
+      -- already exists
+      NULL;
+  END;
+END$$;
 
--- Constraint: claim_expires_at requires claimed_at
-ALTER TABLE receipts ADD CONSTRAINT expiry_requires_claimed_at
-  CHECK (claim_expires_at IS NULL OR claimed_at IS NOT NULL);
+-- Constraint: claim_expires_at requires claimed_at (idempotent, safe on retries)
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.receipts ADD CONSTRAINT expiry_requires_claimed_at
+      CHECK (claim_expires_at IS NULL OR claimed_at IS NOT NULL);
+  EXCEPTION
+    WHEN duplicate_object THEN
+      -- already exists
+      NULL;
+  END;
+END$$;
 
 -- Add index for efficient lookup of unclaimed or expired claims
 CREATE INDEX IF NOT EXISTS idx_receipts_claimable

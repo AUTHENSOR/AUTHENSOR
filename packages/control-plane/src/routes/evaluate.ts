@@ -180,11 +180,12 @@ evaluateRoute.post(
     const engine = new PolicyEngine();
     const result = engine.evaluate(envelope, [policyToUse]);
 
-    // Create receipt
+    // Create receipt (pass approvalConfig from matched rule for multi-party approval)
     const receipt = await createReceipt({
       envelopeId: envelope.id,
       decision: result.decision,
       envelope,
+      approvalConfig: result.matchedRule?.approvalConfig,
     });
 
     const baseUrl = (() => {
