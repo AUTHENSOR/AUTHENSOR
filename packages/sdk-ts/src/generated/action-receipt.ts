@@ -18,6 +18,10 @@ export interface ActionReceipt {
    */
   envelopeId: string;
   /**
+   * Receipt ID of the parent action for cross-agent chain tracing
+   */
+  parentReceiptId?: string;
+  /**
    * ISO 8601 timestamp when the receipt was created
    */
   timestamp: string;
@@ -224,6 +228,10 @@ export interface ActionEnvelope {
      * Parent envelope ID if this is part of a chain
      */
     parentEnvelopeId?: string;
+    /**
+     * Receipt ID of the parent action for cross-agent chain tracing
+     */
+    parentReceiptId?: string;
     /**
      * Deployment environment
      */
