@@ -1,0 +1,173 @@
+name: 'Authensor Aegis Scan'
+description: 'Scan AI agent prompts, tool calls, and content for security threats using Authensor Aegis'
+author: 'Authensor'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  scan-path:
+    description: 'Path to files or directory to scan'
+    required: false
+    default: '.'
+  scan-glob:
+    description: 'Glob pattern for files to scan (e.g., "**/*.prompt.txt")'
+    required: false
+    default: ''
+  scan-text:
+    description: 'Inline text to scan (alternative to file scanning)'
+    required: false
+    default: ''
+  mode:
+    description: 'Scan mode: full, injection-only, pii-only, credentials-only'
+    required: false
+    default: 'full'
+  fail-on:
+    description: 'Minimum threat level to fail the check: low, medium, high, critical'
+    required: false
+    default: 'high'
+  policy-file:
+    description: 'Path to a custom Authensor policy JSON file to validate'
+    required: false
+    default: ''
+  control-plane-url:
+    description: 'Authensor Control Plane URL (optional, for policy evaluation)'
+    required: false
+    default: ''
+  api-key:
+    description: 'Authensor API key (optional, for policy evaluation)'
+    required: false
+    default: ''
+
+outputs:
+  safe:
+    description: 'Whether the scan passed (true/false)'
+  threat-level:
+    description: 'Highest threat level detected (none/low/medium/high/critical)'
+  detections:
+    description: 'Number of detections found'
+  report:
+    description: 'JSON scan report'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+      with:
+        node-version: '20'
+
+    - name: Install Aegis
+      shell: bash
+      run: npm install -g @authensor/aegis@latest
+
+    - name: Run Aegis Scan
+      id: scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.scan-path }}
+        SCAN_GLOB: ${{ inputs.scan-glob }}
+        SCAN_TEXT: ${{ inputs.scan-text }}
+        SCAN_MODE: ${{ inputs.mode }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        POLICY_FILE: ${{ inputs.policy-file }}
+      run: |
+        THREAT_LEVELS=("none" "low" "medium" "high" "critical")
+
+        fail_index=0
+        for i in "${!THREAT_LEVELS[@]}"; do
+          if [[ "${THREAT_LEVELS[$i]}" == "$FAIL_ON" ]]; then
+            fail_index=$i
+          fi
+        done
+
+        if [[ -n "$SCAN_TEXT" ]]; then
+          RESULT=$(echo "$SCAN_TEXT" | aegis scan --json 2>/dev/null || echo '{"safe":false,"threatLevel":"critical","detections":[]}')
+        elif [[ -n "$SCAN_GLOB" ]]; then
+          RESULT='{"safe":true,"threatLevel":"none","detections":[],"filesScanned":0,"totalDetections":0}'
+          FILES=$(find "$SCAN_PATH" -name "$SCAN_GLOB" -type f 2>/dev/null || true)
+          TOTAL_DETECTIONS=0
+          HIGHEST_LEVEL="none"
+          for f in $FILES; do
+            R=$(aegis scan --json < "$f" 2>/dev/null || echo '{"safe":true,"threatLevel":"none","detections":[]}')
+            LEVEL=$(echo "$R" | jq -r '.threatLevel // "none"')
+            DCOUNT=$(echo "$R" | jq '.detections | length')
+            TOTAL_DETECTIONS=$((TOTAL_DETECTIONS + DCOUNT))
+            for i in "${!THREAT_LEVELS[@]}"; do
+              if [[ "${THREAT_LEVELS[$i]}" == "$LEVEL" ]]; then
+                for j in "${!THREAT_LEVELS[@]}"; do
+                  if [[ "${THREAT_LEVELS[$j]}" == "$HIGHEST_LEVEL" ]]; then
+                    if [[ $i -gt $j ]]; then
+                      HIGHEST_LEVEL="$LEVEL"
+                    fi
+                  fi
+                done
+              fi
+            done
+          done
+          SAFE="true"
+          for i in "${!THREAT_LEVELS[@]}"; do
+            if [[ "${THREAT_LEVELS[$i]}" == "$HIGHEST_LEVEL" && $i -ge $fail_index ]]; then
+              SAFE="false"
+            fi
+          done
+          RESULT=$(jq -n \
+            --arg safe "$SAFE" \
+            --arg level "$HIGHEST_LEVEL" \
+            --argjson count "$TOTAL_DETECTIONS" \
+            '{safe: ($safe == "true"), threatLevel: $level, totalDetections: $count}')
+        else
+          RESULT=$(aegis scan --json --demo 2>/dev/null || echo '{"safe":true,"threatLevel":"none","detections":[]}')
+        fi
+
+        SAFE=$(echo "$RESULT" | jq -r '.safe // true')
+        THREAT=$(echo "$RESULT" | jq -r '.threatLevel // "none"')
+        DCOUNT=$(echo "$RESULT" | jq '.detections | length // 0' 2>/dev/null || echo "0")
+
+        echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
+        echo "threat-level=$THREAT" >> "$GITHUB_OUTPUT"
+        echo "detections=$DCOUNT" >> "$GITHUB_OUTPUT"
+        echo "report<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$RESULT" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+        # Determine if we should fail
+        threat_index=0
+        for i in "${!THREAT_LEVELS[@]}"; do
+          if [[ "${THREAT_LEVELS[$i]}" == "$THREAT" ]]; then
+            threat_index=$i
+          fi
+        done
+
+        if [[ $threat_index -ge $fail_index && $fail_index -gt 0 ]]; then
+          echo "::error::Aegis detected threats at level '$THREAT' (threshold: '$FAIL_ON')"
+          exit 1
+        fi
+
+    - name: Create Summary
+      if: always()
+      shell: bash
+      run: |
+        SAFE="${{ steps.scan.outputs.safe }}"
+        THREAT="${{ steps.scan.outputs.threat-level }}"
+        DCOUNT="${{ steps.scan.outputs.detections }}"
+
+        if [[ "$SAFE" == "true" ]]; then
+          ICON="✅"
+        else
+          ICON="🚨"
+        fi
+
+        cat >> "$GITHUB_STEP_SUMMARY" << SUMMARY
+        ## $ICON Authensor Aegis Scan
+
+        | Metric | Value |
+        |--------|-------|
+        | Safe | \`$SAFE\` |
+        | Threat Level | \`$THREAT\` |
+        | Detections | \`$DCOUNT\` |
+        | Fail Threshold | \`${{ inputs.fail-on }}\` |
+
+        [View full report](https://github.com/authensor/authensor)
+        SUMMARY

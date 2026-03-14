@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "authensor.fullname" . }}-control-plane
+  labels:
+    {{- include "authensor.controlPlane.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.controlPlane.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "authensor.controlPlane.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.controlPlane.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "authensor.controlPlane.labels" . | nindent 8 }}
+        {{- with .Values.controlPlane.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "authensor.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.controlPlane.podSecurityContext | nindent 8 }}
+      containers:
+        - name: control-plane
+          image: {{ include "authensor.controlPlane.image" . }}
+          imagePullPolicy: {{ .Values.controlPlane.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.controlPlane.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.controlPlane.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "authensor.configMapName" . }}
+          env:
+            {{- if .Values.existingSecret }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: DATABASE_URL
+            - name: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+                  optional: true
+            {{- else if .Values.databaseUrl }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "authensor.fullname" . }}
+                  key: DATABASE_URL
+            {{- if .Values.bootstrapAdminToken }}
+            - name: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "authensor.fullname" . }}
+                  key: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+            {{- end }}
+            {{- else if .Values.postgresql.enabled }}
+            # Build DATABASE_URL from PostgreSQL subchart
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "authensor.postgresql.passwordSecretName" . }}
+                  key: password
+            - name: DATABASE_URL
+              value: {{ include "authensor.databaseUrl" . | quote }}
+            {{- if .Values.bootstrapAdminToken }}
+            - name: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "authensor.fullname" . }}
+                  key: AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+            {{- end }}
+            {{- end }}
+            {{- with .Values.controlPlane.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.controlPlane.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.controlPlane.readinessProbe | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.controlPlane.startupProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.controlPlane.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.controlPlane.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controlPlane.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controlPlane.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

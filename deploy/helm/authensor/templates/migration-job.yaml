@@ -1,0 +1,96 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "authensor.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "authensor.migration.labels" . | nindent 4 }}
+  annotations:
+    # Run migrations before the deployment starts
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  {{- if .Values.migration.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "authensor.migration.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "authensor.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.controlPlane.podSecurityContext | nindent 8 }}
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: {{ include "authensor.controlPlane.image" . }}
+          imagePullPolicy: {{ .Values.controlPlane.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.controlPlane.securityContext | nindent 12 }}
+          # The control plane runs migrations on startup via initDb().
+          # We start the server and let it apply migrations, then exit.
+          # The /health endpoint confirms DB connectivity and migration success.
+          command:
+            - /bin/sh
+            - -c
+            - |
+              node -e "
+                import('./packages/control-plane/dist/db.js').then(async (mod) => {
+                  try {
+                    await mod.initDb();
+                    console.log('Migrations completed successfully');
+                    process.exit(0);
+                  } catch (err) {
+                    console.error('Migration failed:', err);
+                    process.exit(1);
+                  }
+                });
+              "
+          env:
+            {{- if .Values.existingSecret }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: DATABASE_URL
+            {{- else if .Values.databaseUrl }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "authensor.fullname" . }}
+                  key: DATABASE_URL
+            {{- else if .Values.postgresql.enabled }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "authensor.postgresql.passwordSecretName" . }}
+                  key: password
+            - name: DATABASE_URL
+              value: {{ include "authensor.databaseUrl" . | quote }}
+            {{- end }}
+            - name: NODE_ENV
+              value: {{ .Values.controlPlane.nodeEnv | quote }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.controlPlane.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controlPlane.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

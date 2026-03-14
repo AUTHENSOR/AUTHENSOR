@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use Authensor in your research, please cite it as below."
+type: software
+title: "Authensor: An Open-Source Safety Stack for AI Agents"
+authors:
+  - family-names: Kearney
+    given-names: John
+version: 1.5.0-alpha
+date-released: 2025-01-01
+license: MIT
+url: https://authensor.com
+repository-code: https://github.com/authensor/authensor
+keywords:
+  - ai-safety
+  - agent-authorization
+  - guardrails
+  - content-safety
+  - audit-trail
+  - prompt-injection
+  - owasp-agentic
+  - mcp-security
+  - human-in-the-loop
+  - policy-engine
+abstract: >-
+  Authensor is an open-source platform for AI agent safety providing
+  action authorization via a declarative policy engine, content safety
+  scanning (PII, prompt injection, credentials, exfiltration),
+  tamper-evident hash-chained audit trails, human-in-the-loop approval
+  workflows, and real-time anomaly detection. Covers OWASP Agentic
+  Top 10, EU AI Act Articles 12/14/15, and NIST AI RMF.

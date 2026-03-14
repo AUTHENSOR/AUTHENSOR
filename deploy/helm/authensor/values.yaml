@@ -1,0 +1,306 @@
+# -- Global configuration
+global:
+  # -- Image pull secrets for private registries
+  imagePullSecrets: []
+
+# =============================================================================
+# Control Plane
+# =============================================================================
+controlPlane:
+  # -- Number of control plane replicas
+  replicaCount: 1
+
+  image:
+    # -- Container image repository
+    repository: ghcr.io/authensor/control-plane
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+    # -- Overrides the image tag (default is the chart appVersion)
+    tag: ""
+
+  # -- Port the control plane listens on
+  port: 3000
+
+  # -- Additional environment variables (list of name/value pairs)
+  extraEnv: []
+  #   - name: AUTHENSOR_APPROVAL_EXPIRY_INTERVAL_MS
+  #     value: "60000"
+
+  # -- Node environment
+  nodeEnv: production
+
+  # -- Allow fallback policy when no policy is loaded (fail-closed by default)
+  allowFallbackPolicy: false
+
+  # -- Sandbox mode: "real" for production, "stub" for testing
+  sandboxMode: real
+
+  # -- Skip auto-provisioning of default-safe policy on first boot
+  skipDefaultPolicy: false
+
+  # -- Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # -- Liveness probe configuration
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe configuration
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Startup probe configuration (gives the app time to initialize DB)
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+
+  # -- Security context for the pod
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+  # -- Security context for the container
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  # -- Node selector
+  nodeSelector: {}
+
+  # -- Tolerations
+  tolerations: []
+
+  # -- Affinity rules
+  affinity: {}
+
+  # -- Pod annotations
+  podAnnotations: {}
+
+  # -- Pod labels
+  podLabels: {}
+
+  # -- Service account configuration
+  serviceAccount:
+    # -- Create a service account
+    create: true
+    # -- Annotations to add to the service account
+    annotations: {}
+    # -- Name of the service account (auto-generated if not set)
+    name: ""
+
+# =============================================================================
+# Aegis Content Safety Scanner
+# =============================================================================
+aegis:
+  # -- Enable Aegis content safety scanning
+  enabled: true
+
+# =============================================================================
+# Sentinel Real-Time Monitoring
+# =============================================================================
+sentinel:
+  # -- Enable Sentinel real-time monitoring
+  enabled: true
+
+# =============================================================================
+# MCP Server (optional)
+# =============================================================================
+mcpServer:
+  # -- Enable the MCP server deployment
+  enabled: false
+
+  # -- Number of MCP server replicas
+  replicaCount: 1
+
+  image:
+    # -- Container image repository
+    repository: ghcr.io/authensor/mcp-server
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+    # -- Overrides the image tag (default is the chart appVersion)
+    tag: ""
+
+  # -- Port the MCP server listens on
+  port: 3001
+
+  # -- Additional environment variables
+  extraEnv: []
+
+  # -- Resource limits and requests
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+  # -- Security context for the pod
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+  # -- Security context for the container
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  # -- Node selector
+  nodeSelector: {}
+
+  # -- Tolerations
+  tolerations: []
+
+  # -- Affinity rules
+  affinity: {}
+
+  # -- Pod annotations
+  podAnnotations: {}
+
+  # -- Pod labels
+  podLabels: {}
+
+  # -- Existing secret for MCP integration credentials
+  # Must contain keys: STRIPE_SECRET_KEY, GITHUB_TOKEN (as needed)
+  existingCredentialsSecret: ""
+
+# =============================================================================
+# Service
+# =============================================================================
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Control plane service port
+  port: 3000
+  # -- MCP server service port
+  mcpPort: 3001
+
+# =============================================================================
+# Ingress
+# =============================================================================
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+  #   kubernetes.io/ingress.class: nginx
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
+  # -- Ingress hosts
+  hosts:
+    - host: authensor.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- Ingress TLS configuration
+  tls: []
+  #   - secretName: authensor-tls
+  #     hosts:
+  #       - authensor.example.com
+
+# =============================================================================
+# Horizontal Pod Autoscaler
+# =============================================================================
+autoscaling:
+  # -- Enable HPA
+  enabled: false
+  # -- Minimum replicas
+  minReplicas: 1
+  # -- Maximum replicas
+  maxReplicas: 10
+  # -- Target CPU utilization percentage
+  targetCPUUtilizationPercentage: 80
+  # -- Target memory utilization percentage (optional)
+  # targetMemoryUtilizationPercentage: 80
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+
+# -- Use an existing secret for database credentials and admin token
+# The secret must contain keys: DATABASE_URL, AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN
+existingSecret: ""
+
+# -- Database URL (only used if existingSecret is not set)
+# Format: postgres://user:password@host:port/dbname
+databaseUrl: ""
+
+# -- Bootstrap admin token (only used if existingSecret is not set)
+# Set this on first install to auto-create an admin API key
+bootstrapAdminToken: ""
+
+# =============================================================================
+# PostgreSQL Subchart (Bitnami)
+# =============================================================================
+postgresql:
+  # -- Deploy PostgreSQL as a subchart
+  enabled: true
+  auth:
+    # -- PostgreSQL username
+    username: authensor
+    # -- PostgreSQL password
+    password: ""
+    # -- PostgreSQL database name
+    database: authensor
+    # -- Use an existing secret for PostgreSQL password
+    # Must contain key: password
+    existingSecret: ""
+  primary:
+    persistence:
+      # -- Enable persistence for PostgreSQL
+      enabled: true
+      # -- Storage size
+      size: 10Gi
+
+# =============================================================================
+# Database Migration Job
+# =============================================================================
+migration:
+  # -- Enable migration job on install/upgrade
+  enabled: true
+  # -- Backoff limit for the migration job
+  backoffLimit: 3
+  # -- TTL (seconds) after job finishes before cleanup
+  ttlSecondsAfterFinished: 300
+  # -- Resource limits for migration job
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi

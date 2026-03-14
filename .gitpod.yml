@@ -1,0 +1,20 @@
+tasks:
+  - init: corepack enable && pnpm install && pnpm build
+    command: docker compose up -d postgres && pnpm dev
+
+ports:
+  - port: 3000
+    onOpen: open-browser
+    visibility: public
+    name: Control Plane
+  - port: 3001
+    onOpen: ignore
+    name: MCP Server
+  - port: 5432
+    onOpen: ignore
+    name: PostgreSQL
+
+vscode:
+  extensions:
+    - dbaeumer.vscode-eslint
+    - esbenp.prettier-vscode

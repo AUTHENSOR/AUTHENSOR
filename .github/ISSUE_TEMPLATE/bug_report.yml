@@ -1,0 +1,72 @@
+name: Bug Report
+description: Report a bug in Authensor
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in the details below.
+        For security vulnerabilities, email security@authensor.com instead.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package is affected?
+      options:
+        - "@authensor/control-plane"
+        - "@authensor/engine"
+        - "@authensor/schemas"
+        - "@authensor/sdk"
+        - "@authensor/mcp-server"
+        - "@authensor/aegis"
+        - "@authensor/sentinel"
+        - "authensor (CLI)"
+        - "authensor (Python SDK)"
+        - "@authensor/langchain"
+        - "@authensor/openai"
+        - "@authensor/crewai"
+        - "SafeClaw"
+        - "SiteSitter"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect?
+      placeholder: |
+        **What happened:**
+        ...
+
+        **What I expected:**
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the issue
+      placeholder: |
+        1. Run `npx authensor ...`
+        2. Send POST to /evaluate with ...
+        3. See error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Node version, OS, package versions
+      placeholder: |
+        - Node.js: v20.x
+        - OS: macOS 14 / Ubuntu 22.04
+        - Package version: 0.0.1
+    validations:
+      required: false
