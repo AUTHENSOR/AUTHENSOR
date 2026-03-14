@@ -34,7 +34,7 @@ Think of it as a programmable approval + audit layer between your AI and externa
 
 ### What's Included
 
-- Single-tenant hosted deployment
+- Self-hosted deployment via Docker Compose (recommended), or managed hosted tier
 - API keys for ingest, executor, and admin roles
 - Receipt viewer (HTML dashboard)
 - Metrics summary endpoint

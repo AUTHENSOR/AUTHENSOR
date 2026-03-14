@@ -41,6 +41,16 @@ Authensor is three open-source tools that together cover the full surface area o
 
 ## Quickstart
 
+### Self-hosted (recommended)
+
+```bash
+npx authensor        # Interactive setup wizard
+# or
+docker compose up -d  # Start everything (Postgres + control plane)
+# Control plane running at http://localhost:3000
+# Admin token printed to stdout
+```
+
 ### 30 seconds: Run a safe local agent
 
 ```bash
@@ -49,7 +59,7 @@ npx safeclaw run "list my project files"
 # Opens dashboard at localhost:7700 with policy enforcement + audit trail
 ```
 
-### 5 minutes: Self-hosted control plane
+### 5 minutes: From source
 
 ```bash
 git clone https://github.com/AUTHENSOR/authensor.git
@@ -58,6 +68,12 @@ docker compose up -d
 # Control plane running at http://localhost:3000
 # Admin token printed to stdout
 ```
+
+### Hosted tier
+
+Don't want to manage infrastructure? The managed hosted tier provides the same
+control plane with an uptime SLA, managed Postgres, and SMS/email approval
+gateways. See [Self-Hosting vs. Hosted](#self-hosting-vs-hosted) for details.
 
 ### Add to any agent (TypeScript)
 

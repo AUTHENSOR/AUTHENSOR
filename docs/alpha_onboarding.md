@@ -46,21 +46,37 @@ This ensures:
 
 ## Deploy Your Own Tenant (Recommended)
 
-Deploy your own Authensor control plane on Railway.
+### Option A: Self-Hosted with Docker Compose (Recommended)
 
-### Step 1: Deploy via Railway
+The fastest way to get started. Everything runs locally on your machine.
 
-1. Go to [Railway Dashboard](https://railway.app/dashboard) → **New Project** → **Deploy from GitHub repo**
+```bash
+git clone https://github.com/AUTHENSOR/authensor.git && cd authensor
+docker compose up -d
+# Control plane running at http://localhost:3000
+# Admin token printed to stdout
+```
+
+### Option B: Hosted Tier (Railway)
+
+If you prefer a managed deployment, deploy on Railway:
+
+1. Go to [Railway Dashboard](https://railway.app/dashboard) -- **New Project** -- **Deploy from GitHub repo**
 2. Connect to GitHub repo `AUTHENSOR/AUTHENSOR-ALPHA`, branch `release/v1.5.0-alpha`
 3. Set the required environment variable:
    - `AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN`: Generate with `openssl rand -base64 32`
 4. Click **Apply** and wait (~3 minutes)
 
-### Step 2: Verify with Smoke Test
+### Verify with Smoke Test
 
 ```bash
 export AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN="<your-token>"
-./scripts/smoke_tenant.sh https://<your-service>.up.railway.app
+
+# Self-hosted (default):
+./scripts/smoke_tenant.sh
+
+# Or for a hosted deployment:
+# ./scripts/smoke_tenant.sh https://<your-service>.up.railway.app
 ```
 
 Save the API keys printed at the end:
@@ -68,12 +84,13 @@ Save the API keys printed at the end:
 - **Ingest key**: Send action envelopes for evaluation
 - **Executor key**: Claim and execute receipts
 
-### Step 3: Your First Governed Action
+### Your First Governed Action
 
 **Option A: Direct API (curl)**
 ```bash
 # Evaluate an action (id must be a UUID)
-curl -X POST https://<your-service>.up.railway.app/evaluate \
+# Self-hosted uses http://localhost:3000; hosted uses your deployed URL
+curl -X POST http://localhost:3000/evaluate \
   -H "Authorization: Bearer <ingest-key>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -89,17 +106,18 @@ curl -X POST https://<your-service>.up.railway.app/evaluate \
 **Option B: Node SDK Quickstart**
 ```bash
 # Clone and run the quickstart (no global pnpm needed)
-git clone https://github.com/AUTHENSOR/AUTHENSOR-ALPHA.git
-cd AUTHENSOR-ALPHA/examples/node-quickstart
+git clone https://github.com/AUTHENSOR/authensor.git
+cd authensor/examples/node-quickstart
 corepack enable
 corepack pnpm install
 
-# Set your endpoint and API key
-export CONTROL_PLANE_URL=https://<your-service>.up.railway.app
-export AUTHENSOR_API_KEY=<your-ingest-key>
-
-# Run the quickstart
+# Self-hosted (default -- no CONTROL_PLANE_URL needed, defaults to localhost:3000)
 corepack pnpm start
+
+# For hosted tier deployments:
+# export CONTROL_PLANE_URL=https://<your-service>.up.railway.app
+# export AUTHENSOR_API_KEY=<your-ingest-key>
+# corepack pnpm start
 ```
 
 Or use the SDK directly:
@@ -107,7 +125,7 @@ Or use the SDK directly:
 import { Authensor } from '@authensor/sdk';
 
 const authensor = new Authensor({
-  controlPlaneUrl: process.env.CONTROL_PLANE_URL,
+  controlPlaneUrl: process.env.CONTROL_PLANE_URL || 'http://localhost:3000',
   apiKey: process.env.AUTHENSOR_API_KEY,
   principalId: 'my-agent',
 });
@@ -121,10 +139,16 @@ const result = await authensor.execute('stripe.list_customers', 'stripe://custom
 
 **Option C: MCP Server** (for MCP-compatible clients)
 ```bash
-CONTROL_PLANE_URL=https://<your-service>.up.railway.app \
+# Self-hosted (default):
+CONTROL_PLANE_URL=http://localhost:3000 \
 AUTHENSOR_API_KEY=<your-executor-key> \
 AUTHENSOR_SANDBOX_MODE=stub \
 npx @authensor/mcp-server
+
+# Hosted tier:
+# CONTROL_PLANE_URL=https://<your-service>.up.railway.app \
+# AUTHENSOR_API_KEY=<your-executor-key> \
+# npx @authensor/mcp-server
 ```
 
 > **Note**: By default, your deployment runs in sandbox mode (`AUTHENSOR_SANDBOX_MODE=stub`), which returns stubbed responses without making real API calls. This is safe for testing.

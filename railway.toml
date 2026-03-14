@@ -1,0 +1,12 @@
+# Railway deployment configuration (hosted tier only).
+# This file is used when deploying to Railway's managed hosting platform.
+# It is NOT required for self-hosted deployments (use docker-compose.yml instead).
+# See docs/alpha_onboarding.md for hosted tier setup instructions.
+
+[build]
+buildCommand = "corepack enable && corepack pnpm install && corepack pnpm run build"
+
+[deploy]
+startCommand = "node packages/control-plane/dist/server.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
