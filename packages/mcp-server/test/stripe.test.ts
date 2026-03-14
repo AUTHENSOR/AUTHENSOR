@@ -143,7 +143,7 @@ describe('stripe tool hardening', () => {
   });
 
   it('blocks live mode without allow flag', async () => {
-    setStripeEnv({ STRIPE_LIVE_KEY: 'sk_test_EXAMPLE_LIVE_MODE_KEY' });
+    setStripeEnv({ STRIPE_LIVE_KEY: 'sk_live_123' });
     const authensor = mockAuthensor();
 
     const res = await executeStripeTool(
