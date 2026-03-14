@@ -21,6 +21,7 @@ interface ApiKeyRow {
   name: string;
   role: string;
   key_hash: string;
+  principal_id: string | null;
   created_at: string;
   revoked_at: string | null;
   last_used_at: string | null;
@@ -52,6 +53,7 @@ async function lookupKey(keyHash: string): Promise<ApiKey | null> {
     name: row.name,
     role: row.role as Role,
     keyHash: row.key_hash,
+    principalId: row.principal_id ?? null,
     createdAt: row.created_at,
     revokedAt: row.revoked_at,
     lastUsedAt: row.last_used_at,
@@ -143,6 +145,7 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
         keyId: 'bootstrap',
         role: 'admin' as Role,
         name: 'Bootstrap Mode',
+        principalId: null,
       });
       return next();
     }
@@ -193,6 +196,7 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
     keyId: apiKey.id,
     role: apiKey.role,
     name: apiKey.name,
+    principalId: apiKey.principalId,
   });
 
   return next();

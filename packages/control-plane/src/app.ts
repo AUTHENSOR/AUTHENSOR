@@ -20,6 +20,9 @@ import { metricsRoute } from './routes/metrics.js';
 import { keysRoute } from './routes/keys.js';
 import { controlsRoute } from './routes/controls.js';
 import { dashboardRoute } from './routes/dashboard.js';
+import { transparencyRoute } from './routes/transparency.js';
+import { shadowRoute } from './routes/shadow.js';
+import { budgetsRoute } from './routes/budgets.js';
 import { authMiddleware } from './auth/middleware.js';
 import { rateLimitMiddleware } from './middleware/rate_limit.js';
 import { bodyLimitMiddleware } from './middleware/body_limit.js';
@@ -63,6 +66,7 @@ export function createApp() {
   // - PATCH finalize: executor | admin
   app.route('/receipts', receiptsRoute);
   app.route('/receipts', claimsRoute);
+  app.route('/receipts', transparencyRoute);
 
   // Policies: admin only
   app.route('/policies', policiesRoute);
@@ -79,6 +83,12 @@ export function createApp() {
   // Controls: GET (executor | admin), POST (admin)
   app.route('/controls', controlsRoute);
 
+  // Budgets: admin only
+  app.route('/budgets', budgetsRoute);
+
+  // Shadow/canary policy evaluation report: admin only
+  app.route('/shadow', shadowRoute);
+
   // Dashboard: admin only (HTMX-powered admin UI)
   app.route('/dashboard', dashboardRoute);
 
@@ -89,6 +99,7 @@ export function createApp() {
       keyId: auth.keyId,
       role: auth.role,
       name: auth.name,
+      principalId: auth.principalId ?? null,
     });
   });
 

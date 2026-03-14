@@ -18,6 +18,7 @@ interface ApiKeyRow {
   name: string;
   role: string;
   key_prefix: string | null;
+  principal_id: string | null;
   created_at: string;
   revoked_at: string | null;
   last_used_at: string | null;
@@ -95,7 +96,7 @@ keysRoute.post('/', requireRole(['admin']), async (c) => {
  */
 keysRoute.get('/', requireRole(['admin']), async (c) => {
   const { rows } = await db.query<ApiKeyRow>(
-    `SELECT id, name, role, key_prefix, created_at, revoked_at, last_used_at
+    `SELECT id, name, role, key_prefix, principal_id, created_at, revoked_at, last_used_at
      FROM api_keys
      ORDER BY created_at DESC`
   );
@@ -106,6 +107,7 @@ keysRoute.get('/', requireRole(['admin']), async (c) => {
       name: row.name,
       role: row.role,
       keyPrefix: row.key_prefix,
+      principalId: row.principal_id ?? null,
       createdAt: row.created_at,
       revokedAt: row.revoked_at,
       lastUsedAt: row.last_used_at,
@@ -213,6 +215,63 @@ keysRoute.post('/:id/rotate', requireRole(['admin']), async (c) => {
     name: existing.name,
     rotatedAt: new Date().toISOString(),
   }, 201);
+});
+
+/**
+ * POST /keys/:id/principal - Bind a principal to an API key (admin only)
+ *
+ * When a key has a principal_id, envelopes submitted with that key must
+ * have a matching principal.id. This prevents agent impersonation.
+ */
+keysRoute.post('/:id/principal', requireRole(['admin']), async (c) => {
+  const keyId = c.req.param('id');
+
+  const body = await c.req.json<{ principalId?: string }>();
+
+  if (!body.principalId || typeof body.principalId !== 'string' || body.principalId.trim().length === 0) {
+    return c.json(
+      { error: { code: 'INVALID_INPUT', message: 'principalId is required' } },
+      400
+    );
+  }
+
+  const { rowCount } = await db.query(
+    `UPDATE api_keys SET principal_id = $1 WHERE id = $2`,
+    [body.principalId.trim(), keyId]
+  );
+
+  if (rowCount === 0) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'Key not found' } },
+      404
+    );
+  }
+
+  return c.json({ success: true, principalId: body.principalId.trim() });
+});
+
+/**
+ * DELETE /keys/:id/principal - Unbind a principal from an API key (admin only)
+ *
+ * Removes the principal binding, allowing the key to submit envelopes
+ * with any principal.id (unless strict mode is enabled).
+ */
+keysRoute.delete('/:id/principal', requireRole(['admin']), async (c) => {
+  const keyId = c.req.param('id');
+
+  const { rowCount } = await db.query(
+    `UPDATE api_keys SET principal_id = NULL WHERE id = $1`,
+    [keyId]
+  );
+
+  if (rowCount === 0) {
+    return c.json(
+      { error: { code: 'NOT_FOUND', message: 'Key not found' } },
+      404
+    );
+  }
+
+  return c.json({ success: true, principalId: null });
 });
 
 /**
