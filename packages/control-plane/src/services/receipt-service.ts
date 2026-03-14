@@ -8,7 +8,9 @@ import crypto from 'crypto';
 import type { ActionReceipt, ActionEnvelope, Decision } from '@authensor/engine';
 import { db } from '../db.js';
 import { checkToolExecution } from './controls-service.js';
+import { notifyApprovalRequired } from './approval-notifier.js';
 import { truncateResult, truncateError } from '../middleware/body_limit.js';
+import { parseDuration } from './approval-expirer.js';
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
@@ -146,12 +148,21 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
     input.decision.outcome === 'require_approval' ? ('pending' as const) : null;
 
   const requiredApprovals = input.approvalConfig?.requiredApprovals ?? 1;
+
+  // Compute expiresAt from approvalConfig.expiresIn if provided
+  let approvalExpiresAt: string | undefined;
+  if (approvalStatus !== null && input.approvalConfig?.expiresIn) {
+    const durationMs = parseDuration(input.approvalConfig.expiresIn);
+    approvalExpiresAt = new Date(Date.now() + durationMs).toISOString();
+  }
+
   const approval =
     approvalStatus !== null
       ? ({
           status: approvalStatus,
           requestedAt: new Date().toISOString(),
           requiredApprovals,
+          ...(approvalExpiresAt ? { expiresAt: approvalExpiresAt } : {}),
         } as ActionReceipt['approval'])
       : undefined;
 
@@ -168,7 +179,7 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
 
   const { rows } = await db.query<ReceiptRow>(
     `INSERT INTO receipts (id, envelope_id, status, decision_outcome, tool_name, actor_id, envelope, decision, approval, approval_status, execution_attempts, receipt_hash, prev_receipt_hash, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, 0, $11, $12, now(), now())
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, 0, $11, $12, $13, $13)
      RETURNING *`,
     [
       id,
@@ -183,10 +194,18 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
       approvalStatus,
       receiptHash,
       prevHash,
+      now,
     ]
   );
 
-  return mapRow(rows[0]);
+  const receipt = mapRow(rows[0]);
+
+  // Fire-and-forget: notify approvers when approval is required
+  if (input.decision.outcome === 'require_approval') {
+    notifyApprovalRequired(receipt).catch(() => {});
+  }
+
+  return receipt;
 }
 
 export async function getReceipts(options: GetReceiptsOptions): Promise<ActionReceipt[]> {

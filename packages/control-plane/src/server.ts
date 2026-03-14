@@ -8,6 +8,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { initDb, db } from './db.js';
 import { bootstrapAdminKey } from './routes/keys.js';
+import { startExpirationLoop } from './services/approval-expirer.js';
 
 const port = parseInt(process.env.PORT || '3000', 10);
 
@@ -54,6 +55,13 @@ export async function startServer() {
     fetch: app.fetch,
     port,
   });
+
+  // Start background loop to expire stale approval requests
+  const approvalExpirerIntervalMs = parseInt(
+    process.env.AUTHENSOR_APPROVAL_EXPIRY_INTERVAL_MS || '60000',
+    10
+  );
+  startExpirationLoop(approvalExpirerIntervalMs);
 
   console.log(`✅ Server running at http://localhost:${port}`);
 }

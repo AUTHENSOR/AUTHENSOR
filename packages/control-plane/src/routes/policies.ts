@@ -34,6 +34,15 @@ const policyRuleSchema = z.object({
       scope: z.enum(['principal', 'action', 'global']).optional(),
     })
     .optional(),
+  approvalConfig: z
+    .object({
+      approvers: z
+        .array(z.object({ type: z.string().optional(), id: z.string().optional() }))
+        .optional(),
+      expiresIn: z.string().optional(),
+      requiredApprovals: z.number().int().min(1).optional(),
+    })
+    .optional(),
 });
 
 const policySchema = z.object({

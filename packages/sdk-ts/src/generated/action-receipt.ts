@@ -80,6 +80,23 @@ export interface ActionReceipt {
      * When the approval request expires
      */
     expiresAt?: string;
+    /**
+     * Number of approvals required (from policy approvalConfig)
+     */
+    requiredApprovals?: number;
+    /**
+     * Individual approval responses for multi-party approval
+     */
+    responses?: {
+      id?: string;
+      responderType?: string;
+      responderId: string;
+      responderName?: string;
+      decision: "approve" | "reject";
+      comment?: string;
+      respondedAt: string;
+      [k: string]: unknown;
+    }[];
     [k: string]: unknown;
   };
   /**
@@ -116,6 +133,14 @@ export interface ActionReceipt {
     [k: string]: unknown;
   };
   envelope?: ActionEnvelope;
+  /**
+   * SHA-256 hash of this receipt's core fields (envelopeId, timestamp, decision.outcome, status). Used for tamper detection.
+   */
+  receiptHash?: string;
+  /**
+   * SHA-256 hash of the immediately preceding receipt, forming a hash chain for tamper-evident audit trails.
+   */
+  prevReceiptHash?: string;
   /**
    * Additional receipt metadata
    */

@@ -17,6 +17,7 @@ import { claimsRoute } from './routes/claims.js';
 import { metricsRoute } from './routes/metrics.js';
 import { keysRoute } from './routes/keys.js';
 import { controlsRoute } from './routes/controls.js';
+import { dashboardRoute } from './routes/dashboard.js';
 import { authMiddleware } from './auth/middleware.js';
 import { rateLimitMiddleware } from './middleware/rate_limit.js';
 import { bodyLimitMiddleware } from './middleware/body_limit.js';
@@ -67,6 +68,9 @@ export function createApp() {
 
   // Controls: GET (executor | admin), POST (admin)
   app.route('/controls', controlsRoute);
+
+  // Dashboard: admin only (HTMX-powered admin UI)
+  app.route('/dashboard', dashboardRoute);
 
   // Whoami: any authenticated key - debug endpoint for auth issues
   app.get('/whoami', (c) => {
