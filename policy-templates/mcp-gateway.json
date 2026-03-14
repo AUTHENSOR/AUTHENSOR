@@ -1,0 +1,97 @@
+{
+  "id": "mcp-gateway-safety",
+  "name": "MCP Gateway Safety Policy",
+  "description": "Controls for MCP tool governance. Separates read and write operations, requires approval for mutations, and rate-limits tool calls. Addresses OWASP ASI02 (tool misuse) and ASI04 (supply chain).",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["mcp.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-tool-discovery",
+      "effect": "allow",
+      "description": "Allow listing and describing available tools",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-create-ops",
+      "effect": "require_approval",
+      "description": "Creating resources via MCP tools requires approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "create"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-update-ops",
+      "effect": "require_approval",
+      "description": "Updating resources via MCP tools requires approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "update"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-delete-ops",
+      "effect": "require_approval",
+      "description": "Deleting resources via MCP tools requires dual approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "delete"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-execute-ops",
+      "effect": "require_approval",
+      "description": "Arbitrary execution via MCP tools requires approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "execute"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "rate-limit-all-mcp",
+      "effect": "allow",
+      "description": "Rate limit all MCP tool calls to prevent abuse",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "mcp."
+      },
+      "rateLimit": {
+        "requests": 200,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI02", "ASI04", "ASI07"],
+    "category": "mcp"
+  }
+}

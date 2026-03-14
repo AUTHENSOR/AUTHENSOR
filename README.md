@@ -8,11 +8,23 @@
 </p>
 
 <p align="center">
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
+  </a>
+  <a href="https://github.com/authensor/authensor/actions">
+    <img src="https://img.shields.io/badge/tests-924%20passing-brightgreen.svg" alt="Tests: 924 passing">
+  </a>
+  <a href="https://www.npmjs.com/org/authensor">
+    <img src="https://img.shields.io/badge/npm-%40authensor-red.svg" alt="npm: @authensor">
+  </a>
+</p>
+
+<p align="center">
   <a href="#quickstart">Quickstart</a> &middot;
   <a href="#why-authensor">Why Authensor</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
-  <a href="#the-ecosystem">Ecosystem</a> &middot;
-  <a href="docs/owasp-agentic-alignment.md">OWASP Alignment</a> &middot;
+  <a href="#packages">Packages</a> &middot;
+  <a href="#owasp-agentic-top-10-coverage">OWASP Coverage</a> &middot;
   <a href="docs/eu-ai-act-compliance.md">EU AI Act</a>
 </p>
 
@@ -25,7 +37,7 @@ AI agents are shipping to production without guardrails. They call APIs, browse 
 - **32% of MCP servers** have at least one critical vulnerability ([Enkrypt AI](https://www.enkryptai.com/blog/we-scanned-1-000-mcp-servers-33-had-critical-vulnerabilities))
 - **Agents fall for dark patterns 41% of the time** ([arxiv 2510.18113](https://arxiv.org/abs/2510.18113))
 - **88% of organizations** have confirmed or suspected AI security incidents
-- **Only 6%** have advanced AI security strategies in place
+- **EU AI Act high-risk deadline is August 2, 2026** — creating urgent compliance demand
 
 Existing guardrails focus on what models *say* (prompt/response filtering). Authensor focuses on what agents *do* (action authorization, approval workflows, and cryptographic audit trails).
 
@@ -35,7 +47,7 @@ Authensor is three open-source tools that together cover the full surface area o
 
 | Tool | What it guards | How |
 |------|---------------|-----|
-| **Authensor** | Agent actions (API calls, tool use, data access) | Policy-first evaluation engine + control plane with receipts |
+| **Authensor** | Agent actions (API calls, tool use, data access) | Policy engine + control plane with hash-chained receipts |
 | **[SpiroGrapher](https://github.com/authensor/spirographer)** | Agent web browsing | Compiles HTML to structured IR, detects dark patterns, constitutional rules |
 | **[SafeClaw](https://github.com/authensor/safeclaw)** | Local agent execution | PreToolUse hook gating, deny-by-default, mobile approval workflows |
 
@@ -44,12 +56,14 @@ Authensor is three open-source tools that together cover the full surface area o
 ### Self-hosted (recommended)
 
 ```bash
-npx authensor        # Interactive setup wizard
-# or
-docker compose up -d  # Start everything (Postgres + control plane)
+git clone https://github.com/authensor/authensor.git
+cd authensor
+docker compose up -d
 # Control plane running at http://localhost:3000
-# Admin token printed to stdout
+# Admin token printed to logs: docker compose logs control-plane
 ```
+
+That's it. Postgres starts, migrations run, a bootstrap admin key is created, and a default-safe policy (deny-by-default) is provisioned. Aegis content safety and Sentinel monitoring are enabled out of the box.
 
 ### 30 seconds: Run a safe local agent
 
@@ -58,22 +72,6 @@ npx safeclaw init --demo
 npx safeclaw run "list my project files"
 # Opens dashboard at localhost:7700 with policy enforcement + audit trail
 ```
-
-### 5 minutes: From source
-
-```bash
-git clone https://github.com/AUTHENSOR/authensor.git
-cd authensor
-docker compose up -d
-# Control plane running at http://localhost:3000
-# Admin token printed to stdout
-```
-
-### Hosted tier
-
-Don't want to manage infrastructure? The managed hosted tier provides the same
-control plane with an uptime SLA, managed Postgres, and SMS/email approval
-gateways. See [Self-Hosting vs. Hosted](#self-hosting-vs-hosted) for details.
 
 ### Add to any agent (TypeScript)
 
@@ -111,6 +109,26 @@ async with Authensor(
     )
 ```
 
+### Framework adapters
+
+Drop-in integration for popular agent frameworks:
+
+```typescript
+// LangChain / LangGraph
+import { AuthensorGuardrail } from '@authensor/langchain';
+const guardrail = new AuthensorGuardrail({ controlPlaneUrl: '...' });
+
+// OpenAI Agents SDK
+import { AuthensorGuardrail } from '@authensor/openai';
+
+// CrewAI — coming soon
+// Vercel AI SDK
+import { AuthensorGuardrail } from '@authensor/vercel-ai-sdk';
+
+// Claude Agent SDK
+import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
+```
+
 ## Why Authensor
 
 ### vs. the landscape
@@ -118,59 +136,95 @@ async with Authensor(
 | Capability | Authensor | AWS AgentCore + Cedar | Galileo Agent Control | NeMo Guardrails | Guardrails AI |
 |---|---|---|---|---|---|
 | Action authorization (pre-execution) | Yes | Yes | Yes | No (prompt/response) | No (output validation) |
+| Content safety scanning (pre-eval) | Yes (Aegis) | No | No | Yes | Yes |
 | Approval workflows (human-in-the-loop) | Yes (SMS, Slack, email, mobile PWA) | No | No | No | No |
-| Cryptographic audit trail (receipts) | Yes (hash-chained) | No | No | No | No |
+| Cryptographic audit trail (receipts) | Yes (hash-chained, Sigstore) | No | No | No | No |
+| Real-time anomaly detection | Yes (Sentinel) | No | No | No | No |
 | Deny-by-default / fail-closed | Yes | Yes | No | No | No |
 | Cloud-agnostic | Yes | No (AWS only) | Yes | Yes | Yes |
 | Open source | Yes (MIT) | No (Cedar is, AgentCore isn't) | Yes (Apache 2.0) | Yes (Apache 2.0) | Yes (Apache 2.0) |
 | MCP tool governance | Yes | No | No | No | No |
 | Web browsing governance | Yes (SpiroGrapher) | No | No | No | No |
 | Multi-party approval | Yes | No | No | No | No |
-| Mobile approval UI | Yes (PWA) | No | No | No | No |
+| Cross-agent chain tracing | Yes (parentReceiptId) | No | No | No | No |
+| Session-level threat detection | Yes (forbidden sequences, risk scoring) | No | No | No | No |
+| Budget enforcement | Yes (per-principal spending limits) | No | No | No | No |
+| Shadow/canary policy testing | Yes | No | No | No | No |
+| Framework adapters | 5 (LangChain, OpenAI, CrewAI, Vercel AI, Claude) | 1 (Bedrock) | 1 (custom) | 1 (custom) | 1 (custom) |
 
 ### Key differentiators
 
-1. **Action-level, not prompt-level.** Most guardrails filter what the model says. Authensor governs what the agent does — every tool call, API request, and side effect goes through policy evaluation before execution.
+1. **Action-level, not prompt-level.** Most guardrails filter what the model says. Authensor governs what the agent *does* — every tool call, API request, and side effect goes through policy evaluation before execution.
 
-2. **Three layers of safety.** Authensor (action policies) + SpiroGrapher (web governance) + SafeClaw (local execution gating) cover the full agent attack surface. No other project offers this breadth.
+2. **Defense in depth.** Seven layers of safety in one stack:
+   - **Aegis** scans for prompt injection, jailbreak, PII, and memory poisoning *before* policy evaluation
+   - **Session rules** detect privilege escalation through action sequences and cumulative risk scoring
+   - **Policy engine** evaluates conditions, constraints, rate limits, and budgets
+   - **Approval workflows** force human review for high-consequence actions
+   - **Sentinel** monitors per-agent baselines and detects anomalies in real-time
+   - **Receipts** create a tamper-evident audit trail with hash chains and optional Sigstore transparency
+   - **TOCTOU protection** re-evaluates policy on claim to prevent time-of-check/time-of-use attacks
 
 3. **Receipts, not just logs.** Every action produces a structured, policy-versioned receipt recording what was requested, what policy decided, why, and what happened. Hash-chained for tamper evidence. This directly satisfies EU AI Act Article 12 (record-keeping) and SOX audit requirements.
 
-4. **Fail-closed by default.** No policy loaded? All actions denied. Control plane unreachable? All actions denied. Unknown action type? Denied. This matches OWASP and NIST recommendations.
+4. **Fail-closed by default.** No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. This matches OWASP and NIST recommendations.
 
-5. **Cross-provider.** Works with Claude, GPT, LangChain, CrewAI, AutoGen, or any agent framework. One safety layer for all your agents.
+5. **Cross-provider.** Works with Claude, GPT, LangChain, CrewAI, Vercel AI, or any agent framework. One safety layer for all your agents.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Your Agent                              │
-│  (Claude, GPT, LangChain, AutoGen, CrewAI, custom, etc.)       │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ SDK / MCP / Hook
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Authensor Stack                            │
-│                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐   │
-│  │   Schemas    │→ │    Engine    │→ │   Control Plane     │   │
-│  │ (JSON Schema)│  │ (pure logic) │  │   (HTTP API)        │   │
-│  └──────────────┘  └──────────────┘  └─────────┬───────────┘   │
-│                                                 │               │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────▼───────────┐   │
-│  │  SafeClaw    │  │ SpiroGrapher │  │     Receipts        │   │
-│  │ (local gate) │  │ (web govern) │  │ (hash-chained DB)   │   │
-│  └──────────────┘  └──────────────┘  └─────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Your Agent                                    │
+│  (Claude, GPT, LangChain, CrewAI, Vercel AI, custom, etc.)           │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ SDK / MCP / Hook
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Authensor Stack                                │
+│                                                                       │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────────┐   │
+│  │   Aegis    │→ │   Engine   │→ │  Control   │→ │  Sentinel    │   │
+│  │  (content  │  │   (pure    │  │   Plane    │  │  (real-time  │   │
+│  │   safety)  │  │   logic)   │  │  (HTTP API)│  │  monitoring) │   │
+│  └────────────┘  └────────────┘  └─────┬──────┘  └──────────────┘   │
+│                                        │                              │
+│  ┌────────────┐  ┌────────────┐  ┌─────▼──────┐  ┌──────────────┐   │
+│  │  SafeClaw  │  │ SpiroGrapher│  │  Receipts  │  │   Adapters   │   │
+│  │(local gate)│  │(web govern) │  │(hash chain)│  │(5 frameworks)│   │
+│  └────────────┘  └────────────┘  └────────────┘  └──────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### How it works
 
-1. **Agent wants to act** → SDK wraps the action in an **Action Envelope** (who, what, where, constraints)
-2. **Engine evaluates** → Pure policy logic matches rules, checks conditions, evaluates rate limits
-3. **Decision returned** → `allow`, `deny`, `require_approval`, or `rate_limited`
-4. **Receipt created** → Permanent, structured record of the decision with full provenance
-5. **Action executes** (or doesn't) → Receipt updated with execution result or cancellation
+```
+Agent wants to act
+  │
+  ▼
+Action Envelope created (who, what, where, constraints)
+  │
+  ▼
+Aegis scans for injection, jailbreak, PII, memory poisoning
+  │
+  ▼
+Session rules check forbidden sequences + risk threshold
+  │
+  ▼
+Policy engine evaluates conditions, rate limits, budgets
+  │
+  ▼
+Decision: allow | deny | require_approval | rate_limited
+  │
+  ▼
+Receipt created (hash-chained, policy-versioned)
+  │
+  ▼
+Sentinel monitors for anomalies
+  │
+  ▼
+Action executes (or doesn't) → receipt updated
+```
 
 ### Core concepts
 
@@ -178,7 +232,7 @@ async with Authensor(
 ```json
 {
   "id": "uuid",
-  "timestamp": "2024-01-01T00:00:00Z",
+  "timestamp": "2026-01-01T00:00:00Z",
   "action": {
     "type": "stripe.charges.create",
     "resource": "stripe://customers/cus_123/charges",
@@ -186,64 +240,108 @@ async with Authensor(
     "parameters": { "amount": 1000, "currency": "usd" }
   },
   "principal": { "type": "agent", "id": "my-agent" },
+  "context": { "sessionId": "sess_abc", "parentReceiptId": "uuid" },
   "constraints": { "maxAmount": 10000, "currency": "USD" }
 }
 ```
 
-**Decision** — policy evaluation result:
-```json
-{
-  "outcome": "allow",
-  "policyId": "prod-policy-v2",
-  "policyVersion": "2.1.0",
-  "reason": "Matched rule: allow-stripe-under-10k"
-}
-```
-
-**Receipt** — permanent, auditable record:
+**Receipt** — permanent, auditable, hash-chained record:
 ```json
 {
   "id": "uuid",
   "envelopeId": "uuid",
-  "decision": { "outcome": "allow", "policyId": "prod-policy-v2" },
+  "parentReceiptId": "uuid",
+  "decision": { "outcome": "allow", "policyId": "prod-v2", "policyVersion": "2.1.0" },
   "status": "executed",
-  "execution": { "durationMs": 150, "result": { "chargeId": "ch_..." } }
+  "receiptHash": "sha256:...",
+  "prevReceiptHash": "sha256:..."
 }
 ```
 
-## The Ecosystem
+## Packages
 
-### Authensor Core Packages
+### Core
 
-| Package | Description |
-|---------|-------------|
-| `@authensor/schemas` | JSON Schema definitions — single source of truth |
-| `@authensor/engine` | Pure policy evaluation logic (zero side effects) |
-| `@authensor/control-plane` | HTTP API for evaluate, receipts, approvals, policies |
-| `@authensor/mcp-server` | MCP tools with policy enforcement (Stripe, GitHub, HTTP) |
-| `@authensor/sdk` | TypeScript SDK for agent builders |
-| `authensor` (Python) | Python SDK for agent builders |
+| Package | Description | Deps |
+|---------|-------------|------|
+| `@authensor/schemas` | JSON Schema definitions — single source of truth | 0 |
+| `@authensor/engine` | Pure policy evaluation (conditions, sessions, budgets, constraints) | 0 |
+| `@authensor/aegis` | Content safety scanner (injection, jailbreak, PII, memory poisoning, multimodal) | 0 |
+| `@authensor/sentinel` | Real-time monitoring (EWMA/CUSUM anomaly detection, chain tracking, alerts) | 0 |
+| `@authensor/control-plane` | HTTP API: evaluate, receipts, approvals, policies, budgets, shadow eval | Hono, pg |
+| `@authensor/mcp-server` | MCP tools with policy enforcement (Stripe, GitHub, HTTP) | — |
+| `@authensor/sdk` | TypeScript SDK for agent builders | — |
+| `authensor` | CLI: `authensor policy lint`, `authensor policy test`, `authensor policy diff` | — |
+| `authensor` (Python) | Python SDK | — |
 
-### SafeClaw
+### Framework Adapters
 
-Local-first agent safety with 446 tests, zero npm dependencies:
-- PreToolUse hook intercepts every tool call
-- Deny-by-default policy engine
-- Mobile-responsive PWA dashboard with swipe-to-approve
-- SMS/Slack/Discord/webhook approval notifications
-- Append-only audit ledger with SHA-256 hash chain
-- Budget controls (daily/weekly/monthly spend caps)
-- Container mode for sandboxed execution
+| Package | Framework | Description |
+|---------|-----------|-------------|
+| `@authensor/langchain` | LangChain / LangGraph | Guardrail + interrupt integration |
+| `@authensor/openai` | OpenAI Agents SDK | Pre-execution guardrail |
+| `@authensor/vercel-ai-sdk` | Vercel AI SDK | Middleware integration |
+| `@authensor/claude-agent-sdk` | Claude Agent SDK | Tool-use guardrail |
+| `@authensor/crewai` | CrewAI | Task guardrail (coming soon) |
 
-### SpiroGrapher
+### Companion Tools
 
-Web governance for browsing agents with 1,000+ tests across 13 packages:
-- **Compile**: HTML → structured Web IR (typed entities, actions, regions)
-- **Govern**: 26 constitutional rules across 6+ categories
-- **Receipt**: Cryptographic proof (W3C Verifiable Credentials, Merkle trees)
-- Dark pattern detection (8 categories with FTC/EU DSA regulatory citations)
-- Federated threat intelligence observatory
-- Recipe marketplace with Ed25519-signed packages
+| Tool | Description |
+|------|-------------|
+| [SafeClaw](https://github.com/authensor/safeclaw) | Local agent gating with PreToolUse hooks, mobile PWA dashboard, swipe-to-approve |
+| [SpiroGrapher](https://github.com/authensor/spirographer) | Web governance: HTML→IR compilation, 26 constitutional rules, dark pattern detection |
+
+## Features
+
+### Content Safety (Aegis)
+
+Zero-dependency content scanner that runs *before* policy evaluation:
+- **Prompt injection detection** — 15+ heuristic rules
+- **Jailbreak detection** — pattern matching for common bypass techniques
+- **PII detection** — emails, SSNs, credit cards, phone numbers
+- **Memory poisoning detection** — 22 MINJA-informed rules for persistent memory attacks
+- **Multimodal safety** — 6 heuristic categories for image/file content
+- **Output scanning** — post-execution content validation
+
+### Session Rules
+
+Detect privilege escalation through multi-action patterns:
+- **Forbidden sequences** — block `[auth.login, admin.escalate]` chains with glob matching
+- **Risk scoring** — cumulative per-session risk with configurable weights
+- **Max actions** — cap total actions per session
+- **Lookback windows** — configurable history depth for sequence matching
+
+### Budget Enforcement
+
+Per-principal spending limits with period-based resets:
+- Daily, weekly, monthly, or yearly periods
+- Per-action cost caps
+- Alert thresholds at configurable utilization levels
+- Budget utilization exposed via OpenTelemetry metrics
+
+### Real-Time Monitoring (Sentinel)
+
+Zero-dependency anomaly detection engine:
+- **Per-agent baselines** via EWMA (Exponentially Weighted Moving Average)
+- **CUSUM change detection** for gradual behavioral drift
+- **Configurable alerts** on deny rate, latency, cost, chain depth, and fan-out
+- **Cross-agent chain tracking** — depth and fan-out metrics for delegation chains
+
+### Shadow/Canary Policy Testing
+
+Test new policies alongside active ones without enforcement:
+- `?shadow=policy-id` query parameter or `AUTHENSOR_SHADOW_POLICY_ID` env var
+- Divergence reports: agreement rate, rule breakdown, per-receipt comparison
+- Zero-risk policy migration path
+
+### Transparency & Compliance
+
+- **Hash-chained receipts** — SHA-256 chain makes audit trail tamper-evident
+- **Sigstore/Rekor integration** — optional publishing to public transparency log
+- **Cross-agent tracing** — `parentReceiptId` links receipts across delegation chains
+- **TOCTOU protection** — re-evaluates policy on claim to prevent stale-approval attacks
+- **Principal binding** — bind API keys to specific agent identities
+- **OpenTelemetry** — spans and metrics for every evaluation
 
 ## OWASP Agentic Top 10 Coverage
 
@@ -251,18 +349,18 @@ Authensor addresses all 10 risks in the [OWASP Top 10 for Agentic Applications (
 
 | OWASP Risk | Authensor Coverage |
 |---|---|
-| ASI01: Agent Goal Hijacking | Policy engine evaluates action intent, not just input text |
-| ASI02: Tool Misuse & Exploitation | Per-tool policies with parameter constraints and rate limits |
-| ASI03: Identity & Privilege Abuse | Principal-scoped policies, RBAC, ABAC via conditions |
-| ASI04: Supply Chain Vulnerabilities | MCP server governance, tool schema pinning |
-| ASI05: Unexpected Code Execution | Deny-by-default, explicit allowlisting required |
-| ASI06: Memory & Context Poisoning | Receipt chain provides tamper-evident audit trail |
-| ASI07: Insecure Inter-Agent Communication | Parent envelope chaining, cross-agent policy scoping |
-| ASI08: Cascading Failures | Kill switch, per-tool circuit breakers, rate limiting |
-| ASI09: Human-Agent Trust Exploitation | Approval workflows with multi-party sign-off |
-| ASI10: Rogue Agents | Fail-closed architecture, behavioral anomaly via receipt analysis |
+| ASI01: Agent Goal Hijacking | Aegis pre-eval scanning + policy engine evaluates action intent, not input text |
+| ASI02: Tool Misuse & Exploitation | Per-tool policies, parameter constraints, rate limits, budget caps |
+| ASI03: Identity & Privilege Abuse | Principal binding, RBAC, ABAC conditions, session risk scoring |
+| ASI04: Supply Chain Vulnerabilities | MCP tool governance, domain allowlisting, SSRF protection |
+| ASI05: Unexpected Code Execution | Deny-by-default, explicit allowlisting, SafeClaw container mode |
+| ASI06: Memory & Context Poisoning | Aegis memory poisoning detector (22 MINJA rules), hash-chained receipts |
+| ASI07: Insecure Inter-Agent Communication | Cross-agent chain tracing (parentReceiptId), Sentinel chain depth alerts |
+| ASI08: Cascading Failures | Kill switch, per-tool circuit breakers, rate limiting, Sentinel anomaly detection |
+| ASI09: Human-Agent Trust Exploitation | Multi-party approval workflows, TOCTOU re-evaluation, shadow policy testing |
+| ASI10: Rogue Agents | Fail-closed architecture, Sentinel behavioral baselines, forbidden action sequences |
 
-See [full OWASP alignment document](docs/owasp-agentic-alignment.md) for details.
+See [full OWASP alignment document](docs/owasp-agentic-alignment.md) for detailed mapping.
 
 ## Compliance
 
@@ -270,8 +368,8 @@ Authensor's architecture maps directly to major regulatory requirements:
 
 - **EU AI Act** (Aug 2026 deadline): Article 12 logging → receipt chain, Article 14 human oversight → approval workflows. See [compliance guide](docs/eu-ai-act-compliance.md).
 - **SOC 2**: Immutable audit trail, RBAC, rate limiting, access logging
-- **SOX**: Segregation of duties via approval workflows, 7-year receipt retention support
-- **HIPAA**: Action-level audit logging, access controls
+- **SOX**: Segregation of duties via approval workflows, receipt retention support
+- **HIPAA**: Action-level audit logging, access controls, principal binding
 - **NIST AI RMF**: Govern, Map, Measure, Manage pillars addressed via policies, receipts, and controls
 
 ## API Reference
@@ -279,56 +377,112 @@ Authensor's architecture maps directly to major regulatory requirements:
 | Method | Endpoint | Description | Role |
 |--------|----------|-------------|------|
 | POST | `/evaluate` | Evaluate an action envelope | ingest, admin |
-| GET | `/receipts` | List receipts | ingest, executor, admin |
-| GET | `/receipts/:id` | Get a receipt | ingest, executor, admin |
-| PATCH | `/receipts/:id` | Update receipt status | executor, admin |
+| POST | `/evaluate?shadow=id` | Evaluate with shadow policy | ingest, admin |
+| GET | `/receipts` | List receipts | admin |
+| GET | `/receipts/:id` | Get a receipt | admin |
+| GET | `/receipts/:id/view` | Human-readable receipt viewer | admin |
+| GET | `/receipts/:id/chain` | Get cross-agent receipt chain | admin |
+| GET | `/receipts/:id/transparency` | Get Sigstore transparency proof | admin |
 | POST | `/receipts/:id/claim` | Claim a receipt for execution | executor, admin |
 | POST | `/receipts/:id/finalize` | Finalize execution | executor, admin |
 | GET | `/policies` | List policies | admin |
 | POST | `/policies` | Create a policy | admin |
+| POST | `/policies/:id/activate` | Activate a policy version | admin |
 | POST | `/approvals/:id/approve` | Approve a pending action | admin |
 | POST | `/approvals/:id/reject` | Reject a pending action | admin |
-| GET | `/controls` | Get kill switch / tool controls | admin |
+| GET | `/budgets` | List budgets with utilization | admin |
+| POST | `/budgets` | Create/update a budget | admin |
+| GET | `/shadow/report` | Shadow evaluation divergence report | admin |
+| GET | `/controls` | Get kill switch / tool controls | executor, admin |
 | POST | `/controls` | Update controls | admin |
 | POST | `/keys` | Create API key | admin |
 | GET | `/keys` | List API keys | admin |
+| POST | `/keys/:id/principal` | Bind principal to key | admin |
 | GET | `/metrics/summary` | Usage metrics | admin |
 | GET | `/health` | Health check | public |
+
+## CLI
+
+```bash
+# Lint a policy for common issues
+authensor policy lint policy.json
+
+# Test a policy against scenarios
+authensor policy test policy.json scenarios.json
+
+# Diff two policy versions
+authensor policy diff v1.json v2.json
+```
 
 ## Development
 
 ```bash
-# Prerequisites: Node.js 20+, Docker, pnpm (corepack enable)
-
+# Prerequisites: Node.js 20+, Docker, pnpm
 corepack enable
 pnpm install
-pnpm gen:check          # Verify generated types are current
 
-# Start everything
+# Start the stack
 docker compose up -d    # Postgres + control plane
 pnpm dev                # Dev servers with hot reload
 
-# Test
-pnpm test               # All 146+ tests
+# Test (924 tests across 10 packages)
+pnpm test
 
-# Build
-pnpm build              # Production build
+# Build all packages
+pnpm build
+
+# Verify generated types match schemas
+pnpm gen:check
 ```
 
 ## Self-Hosting vs. Hosted
 
-Everything is open source. Self-host it all, or use the hosted version:
+Everything is open source. Self-host it all, or use the managed version:
 
-| | Self-Hosted (Free) | Hosted (Paid) |
+| | Self-Hosted (Free) | Hosted |
 |---|---|---|
 | Policy engine | Yes | Yes |
 | Control plane | Yes | Yes, managed |
+| Aegis content safety | Yes | Yes |
+| Sentinel monitoring | Yes | Yes, with dashboards |
 | Receipts & audit trail | Yes | Yes, with retention SLA |
 | Approval workflows | Yes | Yes, with SMS/email gateway |
 | SpiroGrapher | Yes | Yes, with federated threat intel |
+| OpenTelemetry export | Yes | Yes, pre-configured |
 | Support | Community | Dedicated |
 | Compliance reports | DIY | Automated |
 | SLA | None | 99.9% uptime |
+
+## Deployment
+
+### Docker Compose (simplest)
+
+```bash
+docker compose up -d
+```
+
+### Helm (Kubernetes)
+
+```bash
+helm install authensor deploy/helm/authensor \
+  --set postgresql.auth.password=your-password \
+  --set controlPlane.env.AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN=your-token
+```
+
+### Terraform
+
+Modules available for AWS (ECS + RDS), GCP (Cloud Run + Cloud SQL), and Railway:
+
+```bash
+cd deploy/terraform/aws
+terraform init && terraform apply
+```
+
+### One-line install (CLI only)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/authensor/authensor/main/install.sh | sh
+```
 
 ## Contributing
 

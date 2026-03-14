@@ -1,0 +1,98 @@
+{
+  "id": "email-comms-safety",
+  "name": "Email & Communications Safety Policy",
+  "description": "Controls for agents sending emails, Slack messages, SMS, and other communications. Limits recipients, requires approval for bulk sends, and prevents spam. Addresses OWASP ASI01 (goal hijacking via phishing).",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["email.*", "slack.*", "sms.*", "comms.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-read-messages",
+      "effect": "allow",
+      "description": "Allow reading messages and conversation history",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-send-email",
+      "effect": "require_approval",
+      "description": "Sending individual emails needs approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "email.send"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-send-slack",
+      "effect": "require_approval",
+      "description": "Posting Slack messages needs approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": ["slack.message.post", "slack.channel.message"]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "deny-bulk-send",
+      "effect": "deny",
+      "description": "Block bulk/mass email sends entirely",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "email.bulk.send",
+          "email.campaign.send",
+          "sms.bulk.send"
+        ]
+      }
+    },
+    {
+      "id": "deny-channel-management",
+      "effect": "deny",
+      "description": "Block creating/deleting/archiving channels",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "slack.channel.create",
+          "slack.channel.delete",
+          "slack.channel.archive"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-sends",
+      "effect": "allow",
+      "description": "Rate limit message sending to prevent spam",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "create"
+      },
+      "rateLimit": {
+        "requests": 20,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI09"],
+    "compliance": ["CAN-SPAM", "GDPR"],
+    "category": "communications"
+  }
+}

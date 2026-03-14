@@ -1,0 +1,64 @@
+{
+  "id": "minimal-starter",
+  "name": "Minimal Starter Policy",
+  "description": "The simplest useful policy — allow reads, require approval for writes, deny everything else. Start here and customize for your use case.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "rules": [
+    {
+      "id": "allow-reads",
+      "effect": "allow",
+      "description": "Allow all read operations without approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-creates",
+      "effect": "require_approval",
+      "description": "Creating anything needs human approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "create"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-updates",
+      "effect": "require_approval",
+      "description": "Updating anything needs human approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "update"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-deletes",
+      "effect": "require_approval",
+      "description": "Deleting anything needs human approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "delete"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    }
+  ],
+  "metadata": {
+    "category": "starter"
+  }
+}
