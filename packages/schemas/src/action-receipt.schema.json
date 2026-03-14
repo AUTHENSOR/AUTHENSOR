@@ -16,6 +16,11 @@
       "format": "uuid",
       "description": "Reference to the original action envelope"
     },
+    "parentReceiptId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Receipt ID of the parent action for cross-agent chain tracing"
+    },
     "timestamp": {
       "type": "string",
       "format": "date-time",
