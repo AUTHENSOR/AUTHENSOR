@@ -9,6 +9,7 @@ import { createApp } from './app.js';
 import { initDb, db } from './db.js';
 import { bootstrapAdminKey } from './routes/keys.js';
 import { startExpirationLoop } from './services/approval-expirer.js';
+import { ensureDefaultPolicy } from './services/default-policies.js';
 
 const port = parseInt(process.env.PORT || '3000', 10);
 
@@ -46,6 +47,11 @@ export async function startServer() {
 
   // Warn if no keys exist and no bootstrap token
   await checkBootstrapRequired();
+
+  // Auto-provision default-safe policy on first boot (skip with env var)
+  if (!process.env.AUTHENSOR_SKIP_DEFAULT_POLICY) {
+    await ensureDefaultPolicy('default', 'dev');
+  }
 
   const app = createApp();
 

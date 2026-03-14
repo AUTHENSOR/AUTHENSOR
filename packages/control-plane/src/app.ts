@@ -12,6 +12,8 @@ import { evaluateRoute } from './routes/evaluate.js';
 import { receiptsRoute } from './routes/receipts.js';
 import { policiesRoute } from './routes/policies.js';
 import { healthRoute } from './routes/health.js';
+import { templatesRoute } from './routes/templates.js';
+import { DEFAULT_SAFE_POLICY } from './services/default-policies.js';
 import { approvalsRoute } from './routes/approvals.js';
 import { claimsRoute } from './routes/claims.js';
 import { metricsRoute } from './routes/metrics.js';
@@ -34,6 +36,14 @@ export function createApp() {
 
   // Health check is public (before auth middleware)
   app.route('/health', healthRoute);
+
+  // Public endpoint: default-safe policy template (before auth middleware)
+  app.get('/policies/default', (c) => {
+    return c.json({ policy: DEFAULT_SAFE_POLICY });
+  });
+
+  // Policy templates: GET endpoints are public discovery, POST /apply requires admin
+  app.route('/templates', templatesRoute);
 
   // Authentication middleware (applied to all protected routes)
   app.use('*', authMiddleware);
