@@ -1,0 +1,17 @@
+{
+  "name": "@authensor/openai",
+  "version": "0.0.1",
+  "description": "Authensor guardrail adapter for OpenAI Agents SDK",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "keywords": ["authensor", "openai", "agents-sdk", "guardrail", "ai-safety"]
+}
