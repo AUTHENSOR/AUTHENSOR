@@ -37,6 +37,8 @@ const envelope = {
 
 describe('control-plane receipts flow (pg-mem)', () => {
   beforeAll(async () => {
+    // Allow fallback allow-all policy so evaluate returns 'allow' without a configured policy
+    process.env.AUTHENSOR_ALLOW_FALLBACK_POLICY = 'true';
     await initDb();
     // Create admin key for auth
     await db.query(
