@@ -1,0 +1,118 @@
+{
+  "id": "customer-support-safety",
+  "name": "Customer Support Agent Policy",
+  "description": "Controls for agents handling customer support tickets, CRM operations, and customer communication. Protects PII, limits escalation, and requires approval for sensitive operations.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["crm.*", "ticketing.*", "support.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-read-tickets",
+      "effect": "allow",
+      "description": "Allow reading ticket details and history",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "allow-update-tickets",
+      "effect": "allow",
+      "description": "Allow updating ticket status and adding internal notes",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "ticketing.ticket.update.status",
+          "ticketing.ticket.add.note",
+          "ticketing.ticket.add.tag"
+        ]
+      }
+    },
+    {
+      "id": "approve-customer-reply",
+      "effect": "require_approval",
+      "description": "Customer-facing replies need human review",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "ticketing.ticket.reply",
+          "support.email.send",
+          "support.chat.send"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-refund-credit",
+      "effect": "require_approval",
+      "description": "Refunds and credits need manager approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "crm.customer.refund",
+          "crm.customer.credit",
+          "crm.customer.discount"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "2h"
+      }
+    },
+    {
+      "id": "deny-delete-customer",
+      "effect": "deny",
+      "description": "Agents cannot delete customer records",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "crm.customer.delete",
+          "crm.customer.purge"
+        ]
+      }
+    },
+    {
+      "id": "deny-export-pii",
+      "effect": "deny",
+      "description": "Block bulk PII export (GDPR/CCPA protection)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "crm.customer.export",
+          "crm.customer.bulk.read"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-replies",
+      "effect": "allow",
+      "description": "Rate limit customer-facing communications",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "ticketing.ticket.reply"
+      },
+      "rateLimit": {
+        "requests": 30,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI09"],
+    "compliance": ["GDPR", "CCPA"],
+    "category": "customer-support"
+  }
+}

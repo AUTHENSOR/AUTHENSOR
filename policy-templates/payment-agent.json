@@ -1,0 +1,108 @@
+{
+  "id": "payment-agent-safety",
+  "name": "Payment Agent Safety Policy",
+  "description": "Controls for agents handling Stripe charges, refunds, transfers, and subscriptions. Caps amounts, requires approval for large charges and all refunds. Addresses OWASP ASI01 (goal hijacking) and ASI02 (tool misuse).",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["stripe.*", "payment.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-reads",
+      "effect": "allow",
+      "description": "Allow reading charge, customer, and subscription data",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "allow-small-charges",
+      "effect": "allow",
+      "description": "Auto-approve charges under $100 (10000 cents)",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "stripe.charges.create" },
+          { "field": "constraints.maxAmount", "operator": "lte", "value": 10000 }
+        ]
+      }
+    },
+    {
+      "id": "approve-medium-charges",
+      "effect": "require_approval",
+      "description": "Charges $100-$5,000 need one approver",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "stripe.charges.create" },
+          { "field": "constraints.maxAmount", "operator": "gt", "value": 10000 },
+          { "field": "constraints.maxAmount", "operator": "lte", "value": 500000 }
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-large-charges",
+      "effect": "require_approval",
+      "description": "Charges over $5,000 need two approvers from finance team",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "eq", "value": "stripe.charges.create" },
+          { "field": "constraints.maxAmount", "operator": "gt", "value": 500000 }
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "4h"
+      }
+    },
+    {
+      "id": "approve-all-refunds",
+      "effect": "require_approval",
+      "description": "All refunds require human approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "stripe\\.refunds\\..*"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "2h"
+      }
+    },
+    {
+      "id": "deny-transfers",
+      "effect": "deny",
+      "description": "Block all direct transfers (must go through refund flow)",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "stripe\\.transfers\\..*"
+      }
+    },
+    {
+      "id": "rate-limit-charges",
+      "effect": "allow",
+      "description": "Rate limit charge creation to prevent runaway billing",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "stripe.charges.create"
+      },
+      "rateLimit": {
+        "requests": 50,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI09"],
+    "compliance": ["PCI-DSS", "SOX"],
+    "category": "financial"
+  }
+}

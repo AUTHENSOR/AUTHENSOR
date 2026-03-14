@@ -1,0 +1,122 @@
+{
+  "id": "financial-compliance-safety",
+  "name": "Financial Compliance Agent Policy (SOX/PCI)",
+  "description": "Controls for agents in regulated financial environments. Enforces segregation of duties, dual approval for material transactions, and comprehensive audit trails for SOX and PCI DSS compliance.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["finance.*", "accounting.*", "payment.*", "banking.*"],
+    "environments": ["production"]
+  },
+  "rules": [
+    {
+      "id": "allow-read-reports",
+      "effect": "allow",
+      "description": "Allow reading financial reports and dashboards",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "finance.report.read",
+          "accounting.balance.read",
+          "finance.dashboard.read"
+        ]
+      }
+    },
+    {
+      "id": "approve-transaction-small",
+      "effect": "require_approval",
+      "description": "Transactions under $10,000 need single approval",
+      "condition": {
+        "all": [
+          { "field": "action.operation", "operator": "eq", "value": "create" },
+          { "field": "constraints.maxAmount", "operator": "lte", "value": 1000000 }
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "4h"
+      }
+    },
+    {
+      "id": "approve-transaction-large",
+      "effect": "require_approval",
+      "description": "Transactions over $10,000 need dual approval (SOX segregation of duties)",
+      "condition": {
+        "all": [
+          { "field": "action.operation", "operator": "eq", "value": "create" },
+          { "field": "constraints.maxAmount", "operator": "gt", "value": 1000000 }
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "24h"
+      }
+    },
+    {
+      "id": "approve-journal-entry",
+      "effect": "require_approval",
+      "description": "Journal entries always require dual approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "accounting.journal.create",
+          "accounting.journal.adjust",
+          "accounting.accrual.create"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "24h"
+      }
+    },
+    {
+      "id": "deny-void-reverse",
+      "effect": "deny",
+      "description": "Block voiding/reversing completed transactions (must go through formal process)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "finance.transaction.void",
+          "finance.transaction.reverse",
+          "accounting.journal.delete"
+        ]
+      }
+    },
+    {
+      "id": "deny-period-close",
+      "effect": "deny",
+      "description": "Block automated period close/reopen (human-only operation)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "accounting.period.close",
+          "accounting.period.reopen"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-transactions",
+      "effect": "allow",
+      "description": "Rate limit transaction creation",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "create"
+      },
+      "rateLimit": {
+        "requests": 25,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI03", "ASI09"],
+    "compliance": ["SOX", "PCI-DSS", "SOC2"],
+    "category": "finance"
+  }
+}

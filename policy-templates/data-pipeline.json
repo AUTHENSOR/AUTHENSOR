@@ -1,0 +1,112 @@
+{
+  "id": "data-pipeline-safety",
+  "name": "Data Pipeline Agent Policy",
+  "description": "Controls for ETL agents, data processing pipelines, and analytics tools. Limits data export volume, requires approval for external transfers, and prevents accidental data loss.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["data.*", "etl.*", "pipeline.*", "analytics.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-read-data",
+      "effect": "allow",
+      "description": "Allow reading and querying data sources",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-transform",
+      "effect": "require_approval",
+      "description": "Data transformations need approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "data.transform",
+          "etl.transform",
+          "pipeline.run"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-write-data",
+      "effect": "require_approval",
+      "description": "Writing data to destinations needs approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "data.write",
+          "etl.load",
+          "data.insert",
+          "data.upsert"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-export-dual",
+      "effect": "require_approval",
+      "description": "Data exports require dual approval (exfiltration risk)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "data.export",
+          "data.download",
+          "analytics.export"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "4h"
+      }
+    },
+    {
+      "id": "deny-delete-datasets",
+      "effect": "deny",
+      "description": "Block dataset deletion",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "data.delete",
+          "data.drop",
+          "data.truncate",
+          "pipeline.delete"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-reads",
+      "effect": "allow",
+      "description": "Rate limit data reads to prevent resource exhaustion",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      },
+      "rateLimit": {
+        "requests": 200,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI02", "ASI08"],
+    "compliance": ["GDPR", "CCPA"],
+    "category": "data"
+  }
+}
