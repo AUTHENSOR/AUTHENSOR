@@ -82,6 +82,10 @@ export interface ActionEnvelope {
      */
     parentEnvelopeId?: string;
     /**
+     * Receipt ID of the parent action for cross-agent chain tracing
+     */
+    parentReceiptId?: string;
+    /**
      * Deployment environment
      */
     environment?: "development" | "staging" | "production";

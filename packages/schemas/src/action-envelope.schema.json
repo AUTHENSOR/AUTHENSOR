@@ -84,6 +84,11 @@
           "format": "uuid",
           "description": "Parent envelope ID if this is part of a chain"
         },
+        "parentReceiptId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Receipt ID of the parent action for cross-agent chain tracing"
+        },
         "environment": {
           "type": "string",
           "enum": ["development", "staging", "production"],

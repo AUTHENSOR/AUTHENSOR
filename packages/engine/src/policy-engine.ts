@@ -14,7 +14,9 @@ import type {
   Decision,
   EvaluationResult,
   RateLimitState,
+  SessionContext,
 } from './types.js';
+import { evaluateSessionRules } from './session-evaluator.js';
 
 export interface PolicyEngineOptions {
   /** Function to check rate limit state (injected for purity) */
@@ -31,8 +33,9 @@ export class PolicyEngine {
   /**
    * Evaluate an action envelope against a set of policies.
    * Returns the decision and metadata about the evaluation.
+   * Optionally accepts a SessionContext for session-level rule enforcement.
    */
-  evaluate(envelope: ActionEnvelope, policies: Policy[]): EvaluationResult {
+  evaluate(envelope: ActionEnvelope, policies: Policy[], sessionContext?: SessionContext): EvaluationResult {
     const startTime = performance.now();
 
     // Sort policies by priority (higher first)
@@ -44,6 +47,23 @@ export class PolicyEngine {
     for (const policy of sortedPolicies) {
       if (!this.policyMatchesScope(policy, envelope)) {
         continue;
+      }
+
+      // Session rules are checked BEFORE per-rule evaluation
+      if (sessionContext && policy.sessionRules) {
+        const sessionResult = evaluateSessionRules(envelope, policy, sessionContext);
+        if (!sessionResult.allowed) {
+          return {
+            decision: createDecision(sessionResult.effect ?? 'deny', {
+              policyId: policy.id,
+              policyVersion: policy.version,
+              reason: sessionResult.violation?.reason ?? 'Session rule violation',
+            }),
+            matchedPolicy: policy,
+            evaluationTimeMs: performance.now() - startTime,
+            sessionViolation: sessionResult.violation,
+          };
+        }
       }
 
       for (const rule of policy.rules) {
