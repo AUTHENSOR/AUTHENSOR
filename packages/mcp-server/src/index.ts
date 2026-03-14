@@ -6,6 +6,7 @@
  */
 
 export { createServer } from './server.js';
+export { createGateway } from './gateway.js';
 export { httpTools } from './tools/http.js';
 export { stripeTools } from './tools/stripe.js';
 export { githubTools } from './tools/github.js';

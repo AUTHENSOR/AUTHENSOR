@@ -6,7 +6,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "authensor-mcp": "./dist/cli.js"
+    "authensor-mcp": "./dist/cli.js",
+    "authensor-mcp-gateway": "./dist/gateway-cli.js"
   },
   "scripts": {
     "build": "tsc",
