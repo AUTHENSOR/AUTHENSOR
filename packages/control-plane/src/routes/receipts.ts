@@ -2,6 +2,8 @@
  * Receipts Route
  *
  * GET /receipts - List receipts (admin only)
+ * GET /receipts/export - NDJSON export (admin only)
+ * GET /receipts/verify - Verify receipt hash chain integrity (admin only)
  * GET /receipts/view - HTML list view (admin only)
  * GET /receipts/:id - Get a specific receipt (admin | executor)
  * GET /receipts/:id/view - HTML detail view (admin | executor)
@@ -15,6 +17,7 @@ import {
   getReceipts,
   getReceiptById,
   updateReceipt,
+  verifyReceiptChain,
 } from '../services/receipt-service.js';
 import { requireRole } from '../auth/middleware.js';
 
@@ -170,6 +173,17 @@ receiptsRoute.get('/export', requireRole(['admin']), async (c) => {
   c.header('Content-Disposition', `attachment; filename="receipts-export-${new Date().toISOString().slice(0, 10)}.ndjson"`);
 
   return c.body(ndjson);
+});
+
+// Verify receipt hash chain integrity (admin only)
+receiptsRoute.get('/verify', requireRole(['admin']), async (c) => {
+  const limit = parseInt(c.req.query('limit') || '1000', 10);
+  const result = await verifyReceiptChain({ limit: Math.min(limit, 10000) });
+  return c.json({
+    ...result,
+    chainIntact: result.broken === 0,
+    checkedAt: new Date().toISOString(),
+  });
 });
 
 // HTML list view (admin only - audit data)

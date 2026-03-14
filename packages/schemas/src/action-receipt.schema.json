@@ -95,6 +95,29 @@
           "type": "string",
           "format": "date-time",
           "description": "When the approval request expires"
+        },
+        "requiredApprovals": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Number of approvals required (from policy approvalConfig)"
+        },
+        "responses": {
+          "type": "array",
+          "description": "Individual approval responses for multi-party approval",
+          "items": {
+            "type": "object",
+            "required": ["responderId", "decision", "respondedAt"],
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "responderType": { "type": "string" },
+              "responderId": { "type": "string" },
+              "responderName": { "type": "string" },
+              "decision": { "type": "string", "enum": ["approve", "reject"] },
+              "comment": { "type": "string" },
+              "respondedAt": { "type": "string", "format": "date-time" }
+            }
+          }
         }
       }
     },
@@ -139,6 +162,14 @@
     "envelope": {
       "$ref": "action-envelope.schema.json",
       "description": "The original action envelope (embedded for completeness)"
+    },
+    "receiptHash": {
+      "type": "string",
+      "description": "SHA-256 hash of this receipt's core fields (envelopeId, timestamp, decision.outcome, status). Used for tamper detection."
+    },
+    "prevReceiptHash": {
+      "type": "string",
+      "description": "SHA-256 hash of the immediately preceding receipt, forming a hash chain for tamper-evident audit trails."
     },
     "metadata": {
       "type": "object",
