@@ -1,0 +1,2565 @@
+openapi: 3.1.0
+info:
+  title: Authensor Control Plane API
+  version: 1.5.0-alpha
+  description: >
+    The Authensor Control Plane is the HTTP API layer for the Authensor safety
+    stack. It provides action authorization (evaluate), approval workflows,
+    receipt management, content safety scanning (Aegis), real-time monitoring
+    (Sentinel), cryptographic audit trails, key management, budget controls,
+    and shadow/canary policy evaluation.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    name: Authensor
+    url: https://authensor.dev
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Health
+    description: Health check and readiness probes (public, no auth required)
+  - name: Evaluation
+    description: Evaluate action envelopes against active policies
+  - name: Receipts
+    description: Immutable, hash-chained audit receipts
+  - name: Claims
+    description: Claim a receipt for exclusive execution (TOCTOU-safe)
+  - name: Approvals
+    description: Multi-party approval workflows
+  - name: Policies
+    description: Policy CRUD and active-policy pointer
+  - name: Templates
+    description: Policy template discovery and application
+  - name: Keys
+    description: API key lifecycle management
+  - name: Controls
+    description: Kill-switch and per-tool execution controls
+  - name: Budgets
+    description: Dollar-denominated cost budget management
+  - name: Metrics
+    description: Operational metrics and insights
+  - name: Shadow
+    description: Shadow/canary policy evaluation divergence reports
+  - name: Aegis
+    description: Content safety scanning (prompt injection, PII, secrets)
+  - name: Sentinel
+    description: Real-time agent monitoring and alerting
+  - name: Transparency
+    description: Transparency log proofs for receipts
+  - name: Dashboard
+    description: HTMX-powered admin dashboard (returns HTML)
+  - name: Utility
+    description: Miscellaneous utility endpoints
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        API key issued by POST /keys. Pass as `Authorization: Bearer <token>`.
+        Keys have roles: admin, ingest, executor.
+
+  parameters:
+    OrgHeader:
+      name: x-authensor-org
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_\-]{1,64}$'
+        default: default
+      description: Organization ID for multi-tenant scoping
+    EnvHeader:
+      name: x-authensor-env
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_\-]{1,64}$'
+        default: dev
+      description: Environment (e.g. dev, staging, production)
+    ReceiptId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Receipt UUID
+
+  schemas:
+    # ── Core types ──────────────────────────────────────────────
+
+    ActionEnvelope:
+      type: object
+      required: [id, timestamp, action, principal, context]
+      properties:
+        id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        action:
+          $ref: '#/components/schemas/Action'
+        principal:
+          $ref: '#/components/schemas/Principal'
+        context:
+          $ref: '#/components/schemas/EnvelopeContext'
+        constraints:
+          $ref: '#/components/schemas/Constraints'
+
+    Action:
+      type: object
+      required: [type, resource]
+      properties:
+        type:
+          type: string
+          description: Action type identifier (e.g. "http.request", "github.push")
+        resource:
+          type: string
+          description: Target resource identifier
+        operation:
+          type: string
+          enum: [create, read, update, delete, execute]
+        parameters:
+          type: object
+          additionalProperties: true
+
+    Principal:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [user, agent, service, system]
+        id:
+          type: string
+        name:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: true
+
+    EnvelopeContext:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        traceId:
+          type: string
+        parentEnvelopeId:
+          type: string
+          format: uuid
+        parentReceiptId:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum: [development, staging, production]
+        sourceIp:
+          type: string
+        userAgent:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Constraints:
+      type: object
+      properties:
+        maxAmount:
+          type: number
+        currency:
+          type: string
+        allowedDomains:
+          type: array
+          items:
+            type: string
+        timeout:
+          type: number
+        retryPolicy:
+          type: object
+          properties:
+            maxRetries:
+              type: integer
+              minimum: 0
+            backoffMs:
+              type: integer
+              minimum: 0
+
+    Decision:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [allow, deny, require_approval, rate_limited]
+        reason:
+          type: string
+        policyId:
+          type: string
+        policyVersion:
+          type: string
+
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        envelopeId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, executed, failed, skipped, cancelled]
+        decision:
+          $ref: '#/components/schemas/Decision'
+        envelope:
+          $ref: '#/components/schemas/ActionEnvelope'
+        approval:
+          $ref: '#/components/schemas/ApprovalInfo'
+        execution:
+          $ref: '#/components/schemas/ExecutionInfo'
+        receiptHash:
+          type: string
+          description: SHA-256 hash for chain integrity
+        previousHash:
+          type: string
+          description: Hash of the previous receipt in the chain
+        metadata:
+          type: object
+          additionalProperties: true
+        receiptApiUrl:
+          type: string
+        receiptUrl:
+          type: string
+        receiptLink:
+          type: string
+        receiptApiLink:
+          type: string
+
+    ApprovalInfo:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        respondedAt:
+          type: string
+          format: date-time
+        respondedBy:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+        comment:
+          type: string
+        requiredApprovals:
+          type: integer
+          minimum: 1
+
+    ExecutionInfo:
+      type: object
+      properties:
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: number
+        result:
+          type: object
+          additionalProperties: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+
+    # ── Policy types ────────────────────────────────────────────
+
+    Policy:
+      type: object
+      required: [id, name, version, rules]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        enabled:
+          type: boolean
+        priority:
+          type: number
+        scope:
+          type: object
+          properties:
+            actionTypes:
+              type: array
+              items:
+                type: string
+            principalTypes:
+              type: array
+              items:
+                type: string
+                enum: [user, agent, service, system]
+            environments:
+              type: array
+              items:
+                type: string
+                enum: [development, staging, production]
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyRule'
+        defaultEffect:
+          type: string
+          enum: [allow, deny]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PolicyRule:
+      type: object
+      required: [id, effect]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        effect:
+          type: string
+          enum: [allow, deny, require_approval]
+        condition:
+          type: object
+          additionalProperties: true
+        rateLimit:
+          type: object
+          properties:
+            requests:
+              type: number
+            window:
+              type: string
+            scope:
+              type: string
+              enum: [principal, action, global]
+        approvalConfig:
+          type: object
+          properties:
+            approvers:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  id:
+                    type: string
+            expiresIn:
+              type: string
+            requiredApprovals:
+              type: integer
+              minimum: 1
+
+    # ── Budget types ────────────────────────────────────────────
+
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        principalId:
+          type: string
+        budgetAmount:
+          type: number
+        spentAmount:
+          type: number
+        currency:
+          type: string
+        period:
+          type: string
+          enum: [hourly, daily, monthly]
+        scope:
+          type: string
+          enum: [principal, action_type, global]
+        scopeKey:
+          type: string
+        utilization:
+          type: number
+        remaining:
+          type: number
+
+    # ── Error types ─────────────────────────────────────────────
+
+    Error:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+
+paths:
+  # ════════════════════════════════════════════════════════════════
+  # Health
+  # ════════════════════════════════════════════════════════════════
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Liveness probe
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /health/ready:
+    get:
+      operationId: readinessCheck
+      summary: Readiness probe (checks database connectivity)
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: ok
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: error
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                      error:
+                        type: string
+
+  # ════════════════════════════════════════════════════════════════
+  # Evaluation
+  # ════════════════════════════════════════════════════════════════
+
+  /evaluate:
+    post:
+      operationId: evaluateEnvelope
+      summary: Evaluate an action envelope against the active policy
+      description: >
+        Submits an action envelope for policy evaluation. The engine matches
+        the envelope against the active policy rules, creates an immutable
+        receipt, and returns the decision. Optionally performs shadow/canary
+        evaluation against a second policy (via `?shadow=` query param or
+        AUTHENSOR_SHADOW_POLICY_ID env var).
+      tags: [Evaluation]
+      parameters:
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+        - name: shadow
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 'Shadow policy ID to evaluate alongside (format: policyId or policyId@version)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionEnvelope'
+      responses:
+        '200':
+          description: Evaluation result with receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receiptId:
+                    type: string
+                    format: uuid
+                  receiptUrl:
+                    type: string
+                  receiptApiUrl:
+                    type: string
+                  receiptLink:
+                    type: string
+                  receiptApiLink:
+                    type: string
+                  decision:
+                    $ref: '#/components/schemas/Decision'
+                  policy:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      version:
+                        type: string
+                      source:
+                        type: string
+                        enum: [db, fallback, none]
+                  evaluationTimeMs:
+                    type: number
+                  shadowResult:
+                    type: object
+                    description: Present only when shadow evaluation was performed
+                    properties:
+                      decision:
+                        type: string
+                      policyId:
+                        type: string
+                      policyVersion:
+                        type: string
+                      matchedRule:
+                        type: string
+                      reason:
+                        type: string
+        '403':
+          description: Principal mismatch or strict binding violation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ════════════════════════════════════════════════════════════════
+  # Receipts
+  # ════════════════════════════════════════════════════════════════
+
+  /receipts:
+    get:
+      operationId: listReceipts
+      summary: List receipts with optional filters
+      tags: [Receipts]
+      description: Returns paginated receipts. Admin only (audit data).
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, executed, failed, skipped, cancelled]
+        - name: principalId
+          in: query
+          schema:
+            type: string
+        - name: toolName
+          in: query
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          schema:
+            type: string
+        - name: decisionOutcome
+          in: query
+          schema:
+            type: string
+            enum: [allow, deny, require_approval, rate_limited]
+      responses:
+        '200':
+          description: Paginated list of receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receipts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Receipt'
+                  pagination:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      total:
+                        type: integer
+
+  /receipts/export:
+    get:
+      operationId: exportReceipts
+      summary: Export receipts as NDJSON
+      tags: [Receipts]
+      description: >
+        Exports receipts as newline-delimited JSON for data pipelines and SIEM
+        ingestion. Secrets in envelope parameters are automatically redacted.
+        Admin only.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 1000
+            maximum: 10000
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: toolName
+          in: query
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          schema:
+            type: string
+        - name: decisionOutcome
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: NDJSON stream of receipts
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+
+  /receipts/verify:
+    get:
+      operationId: verifyReceiptChain
+      summary: Verify receipt hash-chain integrity
+      tags: [Receipts]
+      description: >
+        Walks the receipt chain and checks SHA-256 hash continuity.
+        Returns the number of verified, broken, and unchained receipts.
+        Admin only.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 1000
+            maximum: 10000
+      responses:
+        '200':
+          description: Chain verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: integer
+                  broken:
+                    type: integer
+                  unchained:
+                    type: integer
+                  chainIntact:
+                    type: boolean
+                  checkedAt:
+                    type: string
+                    format: date-time
+
+  /receipts/view:
+    get:
+      operationId: listReceiptsHtml
+      summary: HTML list view of receipts
+      tags: [Receipts]
+      description: Returns an HTML page listing recent receipts. Admin only.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: toolName
+          in: query
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          schema:
+            type: string
+        - name: decisionOutcome
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /receipts/{id}:
+    get:
+      operationId: getReceipt
+      summary: Get a specific receipt by ID
+      tags: [Receipts]
+      description: Returns the full receipt including envelope, decision, execution data, and links. Requires admin or executor role.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '400':
+          description: Invalid receipt ID format
+        '404':
+          description: Receipt not found
+
+    patch:
+      operationId: updateReceipt
+      summary: Update a receipt (e.g. mark as executed/failed)
+      tags: [Receipts]
+      description: >
+        Update receipt status, execution details, or approval info.
+        Requires executor or admin role.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, executed, failed, skipped, cancelled]
+                claimId:
+                  type: string
+                  format: uuid
+                execution:
+                  $ref: '#/components/schemas/ExecutionInfo'
+                approval:
+                  $ref: '#/components/schemas/ApprovalInfo'
+      responses:
+        '200':
+          description: Updated receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '400':
+          description: Invalid request
+        '404':
+          description: Receipt not found
+
+  /receipts/{id}/view:
+    get:
+      operationId: getReceiptHtml
+      summary: HTML detail view for a single receipt
+      tags: [Receipts]
+      description: >
+        Returns a rendered HTML page showing the receipt envelope, decision,
+        approval status, execution result, and error details. Secrets are
+        redacted. Requires admin or executor role.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Invalid receipt ID format
+        '404':
+          description: Receipt not found
+
+  /receipts/{id}/chain:
+    get:
+      operationId: getReceiptChain
+      summary: Get receipt chain (ancestors and descendants)
+      tags: [Receipts]
+      description: Returns the full chain of receipts linked via parentReceiptId. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receiptId:
+                    type: string
+                    format: uuid
+                  chain:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Receipt'
+                  chainLength:
+                    type: integer
+        '404':
+          description: Receipt not found
+
+  # ════════════════════════════════════════════════════════════════
+  # Claims
+  # ════════════════════════════════════════════════════════════════
+
+  /receipts/{id}/claim:
+    post:
+      operationId: claimReceipt
+      summary: Claim a receipt for exclusive execution
+      tags: [Claims]
+      description: >
+        Atomically claims a receipt so only one executor processes it.
+        Performs TOCTOU re-evaluation for require_approval decisions to ensure
+        the policy hasn't changed since approval. Returns a claim ID and
+        expiration. Requires executor or admin role.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      responses:
+        '200':
+          description: Receipt successfully claimed (or already executed)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: Successfully claimed
+                    properties:
+                      claimId:
+                        type: string
+                        format: uuid
+                      claimExpiresAt:
+                        type: string
+                        format: date-time
+                      receipt:
+                        $ref: '#/components/schemas/Receipt'
+                  - type: object
+                    description: Already executed
+                    properties:
+                      already_executed:
+                        type: boolean
+                      receipt:
+                        $ref: '#/components/schemas/Receipt'
+        '400':
+          description: Invalid receipt ID format
+        '403':
+          description: >
+            Claim rejected — TOCTOU policy changed (TOCTOU_POLICY_CHANGED),
+            execution disabled (EXECUTION_DISABLED), or tool disabled
+            (TOOL_DISABLED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Receipt already claimed by another executor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  retryAfterSeconds:
+                    type: number
+                  claimExpiresAt:
+                    type: string
+                    format: date-time
+
+  # ════════════════════════════════════════════════════════════════
+  # Approvals
+  # ════════════════════════════════════════════════════════════════
+
+  /approvals/{id}:
+    get:
+      operationId: getApprovalStatus
+      summary: Get approval status and all responses
+      tags: [Approvals]
+      description: >
+        Returns the current approval status, quorum progress, and individual
+        responses for a receipt that requires approval. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Approval status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receiptId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, approved, rejected, expired]
+                  requiredApprovals:
+                    type: integer
+                  approveCount:
+                    type: integer
+                  rejectCount:
+                    type: integer
+                  quorumReached:
+                    type: boolean
+                  responses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        responderId:
+                          type: string
+                        responderType:
+                          type: string
+                        responderName:
+                          type: string
+                        decision:
+                          type: string
+                          enum: [approve, reject]
+                        comment:
+                          type: string
+                        respondedAt:
+                          type: string
+                          format: date-time
+        '400':
+          description: Receipt does not require approval
+        '404':
+          description: Receipt not found
+
+  /approvals/{id}/respond:
+    post:
+      operationId: submitApprovalResponse
+      summary: Submit a multi-party approval response
+      tags: [Approvals]
+      description: >
+        Adds an individual approval or rejection response. When the quorum
+        threshold is reached the receipt's approval status is automatically
+        updated. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [responderId, decision]
+              properties:
+                responderId:
+                  type: string
+                  minLength: 1
+                responderType:
+                  type: string
+                responderName:
+                  type: string
+                decision:
+                  type: string
+                  enum: [approve, reject]
+                comment:
+                  type: string
+      responses:
+        '200':
+          description: Response recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receipt:
+                    $ref: '#/components/schemas/Receipt'
+                  response:
+                    type: object
+                  quorumReached:
+                    type: boolean
+                  approveCount:
+                    type: integer
+                  rejectCount:
+                    type: integer
+                  requiredApprovals:
+                    type: integer
+        '400':
+          description: Invalid request or receipt does not require approval
+        '404':
+          description: Receipt not found
+
+  /approvals/{id}/approve:
+    post:
+      operationId: approveReceipt
+      summary: Approve a pending receipt (legacy single-approver)
+      tags: [Approvals]
+      description: >
+        Marks a pending approval as approved. This is the legacy
+        single-approver endpoint; prefer POST /approvals/{id}/respond for
+        multi-party workflows. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '400':
+          description: Receipt does not require approval
+        '404':
+          description: Receipt not found
+
+  /approvals/{id}/reject:
+    post:
+      operationId: rejectReceipt
+      summary: Reject a pending receipt
+      tags: [Approvals]
+      description: Marks a pending approval as rejected and cancels the receipt. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '400':
+          description: Receipt does not require approval
+        '404':
+          description: Receipt not found
+
+  /approvals/{id}/expire:
+    post:
+      operationId: expireReceipt
+      summary: Expire a pending approval
+      tags: [Approvals]
+      description: Marks a pending approval as expired and cancels the receipt. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '400':
+          description: Receipt does not require approval
+        '404':
+          description: Receipt not found
+
+  # ════════════════════════════════════════════════════════════════
+  # Policies
+  # ════════════════════════════════════════════════════════════════
+
+  /policies:
+    get:
+      operationId: listPolicies
+      summary: List all policies and the active pointer
+      tags: [Policies]
+      description: Returns all stored policies for the org/environment and identifies the currently active one. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      responses:
+        '200':
+          description: Policies list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Policy'
+                  active:
+                    $ref: '#/components/schemas/Policy'
+
+    post:
+      operationId: createPolicy
+      summary: Create a new policy
+      tags: [Policies]
+      description: Stores a new policy version. Does not activate it — use POST /policies/active to set the active pointer. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Policy'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '400':
+          description: Validation error or duplicate
+
+  /policies/active:
+    get:
+      operationId: getActivePolicy
+      summary: Get the currently active policy
+      tags: [Policies]
+      description: Returns the active policy for the org/environment. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      responses:
+        '200':
+          description: Active policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/Policy'
+        '404':
+          description: No active policy configured
+
+    post:
+      operationId: setActivePolicy
+      summary: Set the active policy pointer
+      tags: [Policies]
+      description: Points the active policy to a specific policy ID and version. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy_id, version]
+              properties:
+                policy_id:
+                  type: string
+                version:
+                  type: string
+      responses:
+        '200':
+          description: Active policy updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /policies/default:
+    get:
+      operationId: getDefaultPolicy
+      summary: Get the default safe policy template
+      tags: [Policies]
+      security: []
+      description: Returns the built-in default-safe policy. Public endpoint, no auth required.
+      responses:
+        '200':
+          description: Default safe policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/Policy'
+
+  # ════════════════════════════════════════════════════════════════
+  # Templates
+  # ════════════════════════════════════════════════════════════════
+
+  /templates:
+    get:
+      operationId: listTemplates
+      summary: List available policy templates
+      tags: [Templates]
+      security: []
+      description: >
+        Returns lightweight metadata for all built-in policy templates.
+        Public discovery endpoint — no authentication required.
+      responses:
+        '200':
+          description: Template list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+
+  /templates/{id}:
+    get:
+      operationId: getTemplate
+      summary: Get full policy JSON for a template
+      tags: [Templates]
+      security: []
+      description: Returns the full policy definition for a specific template. Public endpoint.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template:
+                    $ref: '#/components/schemas/Policy'
+        '404':
+          description: Template not found
+
+  /templates/{id}/apply:
+    post:
+      operationId: applyTemplate
+      summary: Apply a template (create and activate the policy)
+      tags: [Templates]
+      description: >
+        Creates the policy from the template in the caller's org/environment
+        and immediately activates it. Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      responses:
+        '201':
+          description: Template applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  applied:
+                    type: object
+                    properties:
+                      templateId:
+                        type: string
+                      policyId:
+                        type: string
+                      version:
+                        type: string
+                      orgId:
+                        type: string
+                      environment:
+                        type: string
+        '400':
+          description: Apply failed
+        '404':
+          description: Template not found
+
+  # ════════════════════════════════════════════════════════════════
+  # Keys
+  # ════════════════════════════════════════════════════════════════
+
+  /keys:
+    get:
+      operationId: listKeys
+      summary: List all API keys
+      tags: [Keys]
+      description: >
+        Returns metadata for all API keys. The key_hash is never returned —
+        only the display prefix for identification. Admin only.
+      responses:
+        '200':
+          description: API key list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    role:
+                      type: string
+                      enum: [ingest, executor, admin]
+                    keyPrefix:
+                      type: string
+                      description: Display prefix (e.g. "authensor_XXXX...YYYY")
+                    principalId:
+                      type: string
+                      nullable: true
+                    createdAt:
+                      type: string
+                      format: date-time
+                    revokedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    lastUsedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+
+    post:
+      operationId: createKey
+      summary: Create a new API key
+      tags: [Keys]
+      description: >
+        Creates a new API key with the specified name and role. The plaintext
+        token is returned ONCE in the response and is never stored or
+        retrievable again. Admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                role:
+                  type: string
+                  enum: [ingest, executor, admin]
+      responses:
+        '201':
+          description: Key created (token shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyId:
+                    type: string
+                    format: uuid
+                  keyPrefix:
+                    type: string
+                  token:
+                    type: string
+                    description: Plaintext API token — shown once, never stored
+                  createdAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid input
+
+  /keys/{id}/revoke:
+    post:
+      operationId: revokeKey
+      summary: Revoke an API key
+      tags: [Keys]
+      description: Sets revoked_at, making the key permanently invalid. Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  revokedAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid key ID format
+        '404':
+          description: Key not found or already revoked
+
+  /keys/{id}/rotate:
+    post:
+      operationId: rotateKey
+      summary: Rotate an API key
+      tags: [Keys]
+      description: >
+        Revokes the existing key and creates a new one with the same name and
+        role. Returns the new plaintext token (shown once). Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Key rotated (new token shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  previousKeyId:
+                    type: string
+                    format: uuid
+                  keyId:
+                    type: string
+                    format: uuid
+                  keyPrefix:
+                    type: string
+                  token:
+                    type: string
+                    description: New plaintext API token — shown once
+                  role:
+                    type: string
+                  name:
+                    type: string
+                  rotatedAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid key ID format
+        '404':
+          description: Key not found or already revoked
+
+  /keys/{id}/principal:
+    post:
+      operationId: bindPrincipal
+      summary: Bind a principal to an API key
+      tags: [Keys]
+      description: >
+        When a key has a principal_id, envelopes submitted with that key must
+        have a matching principal.id. This prevents agent impersonation.
+        Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId]
+              properties:
+                principalId:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Principal bound
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  principalId:
+                    type: string
+        '400':
+          description: Invalid input
+        '404':
+          description: Key not found
+
+    delete:
+      operationId: unbindPrincipal
+      summary: Unbind a principal from an API key
+      tags: [Keys]
+      description: >
+        Removes the principal binding, allowing the key to submit envelopes
+        with any principal.id (unless strict mode is enabled). Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Principal unbound
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  principalId:
+                    type: 'null'
+        '404':
+          description: Key not found
+
+  # ════════════════════════════════════════════════════════════════
+  # Controls
+  # ════════════════════════════════════════════════════════════════
+
+  /controls:
+    get:
+      operationId: getControls
+      summary: Get current execution controls state
+      tags: [Controls]
+      description: Returns the current state of all kill switches and tool-level disables. Requires executor or admin role.
+      responses:
+        '200':
+          description: Controls state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  disableExecution:
+                    type: boolean
+                    description: Global kill switch — disables all execution
+                  disableHttp:
+                    type: boolean
+                  disableGithub:
+                    type: boolean
+                  disableStripe:
+                    type: boolean
+
+    post:
+      operationId: updateControls
+      summary: Update execution controls
+      tags: [Controls]
+      description: >
+        Toggle kill switches and per-tool execution controls. Accepts both
+        camelCase and snake_case field names. Admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                disableExecution:
+                  type: boolean
+                  description: Global kill switch
+                disableHttp:
+                  type: boolean
+                disableGithub:
+                  type: boolean
+                disableStripe:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated controls state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  disableExecution:
+                    type: boolean
+                  disableHttp:
+                    type: boolean
+                  disableGithub:
+                    type: boolean
+                  disableStripe:
+                    type: boolean
+
+  /controls/check:
+    get:
+      operationId: checkToolExecution
+      summary: Check if a specific tool is allowed to execute
+      tags: [Controls]
+      description: >
+        Defense-in-depth check used by the MCP server before executing a tool.
+        Returns whether the tool is currently allowed. Requires executor or
+        admin role.
+      parameters:
+        - name: tool
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Tool name (e.g. http, github, stripe)
+      responses:
+        '200':
+          description: Tool execution status
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      allowed:
+                        type: boolean
+                        const: true
+                  - type: object
+                    properties:
+                      allowed:
+                        type: boolean
+                        const: false
+                      code:
+                        type: string
+                        enum: [EXECUTION_DISABLED, TOOL_DISABLED]
+                      message:
+                        type: string
+        '400':
+          description: Missing tool parameter
+
+  # ════════════════════════════════════════════════════════════════
+  # Budgets
+  # ════════════════════════════════════════════════════════════════
+
+  /budgets:
+    post:
+      operationId: createBudget
+      summary: Create or update a cost budget
+      tags: [Budgets]
+      description: >
+        Upserts a dollar-denominated cost budget for a principal. Budgets
+        track spend per period and can scope to principal, action_type, or
+        global. Admin only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId, budgetAmount, period]
+              properties:
+                principalId:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                budgetAmount:
+                  type: number
+                  exclusiveMinimum: 0
+                currency:
+                  type: string
+                  minLength: 3
+                  maxLength: 3
+                  default: USD
+                period:
+                  type: string
+                  enum: [hourly, daily, monthly]
+                scope:
+                  type: string
+                  enum: [principal, action_type, global]
+                  default: principal
+                scopeKey:
+                  type: string
+                  maxLength: 255
+      responses:
+        '201':
+          description: Budget created/updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  budget:
+                    $ref: '#/components/schemas/Budget'
+        '500':
+          description: Internal error
+
+    get:
+      operationId: listBudgets
+      summary: List all budgets with utilization
+      tags: [Budgets]
+      description: Returns paginated budgets across all principals. Admin only.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Budget list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  budgets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Budget'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /budgets/{principalId}:
+    get:
+      operationId: getBudgetsForPrincipal
+      summary: Get budgets for a specific principal
+      tags: [Budgets]
+      description: Returns all budgets for the given principal with utilization and remaining amounts. Admin only.
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Principal budgets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  principalId:
+                    type: string
+                  budgets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Budget'
+        '404':
+          description: No budgets found for principal
+
+  /budgets/{principalId}/ledger:
+    get:
+      operationId: getBudgetLedger
+      summary: Get spend ledger for a principal
+      tags: [Budgets]
+      description: Returns individual spend entries for audit. Admin only.
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Ledger entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  principalId:
+                    type: string
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                  count:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /budgets/{id}:
+    delete:
+      operationId: deleteBudget
+      summary: Delete a budget
+      tags: [Budgets]
+      description: Permanently removes a budget by ID. Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Budget deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  id:
+                    type: string
+        '404':
+          description: Budget not found
+
+  # ════════════════════════════════════════════════════════════════
+  # Metrics
+  # ════════════════════════════════════════════════════════════════
+
+  /metrics/summary:
+    get:
+      operationId: getMetricsSummary
+      summary: Get metrics summary with operational insights
+      tags: [Metrics]
+      description: >
+        Returns aggregated metrics for receipts, claims, and approval flows
+        within a time window. Includes computed ratios and actionable insights
+        (e.g. deny-rate spikes, claim conflicts, stuck approvals). Admin only.
+      parameters:
+        - name: window
+          in: query
+          schema:
+            type: string
+            enum: ['1h', '24h', '7d']
+            default: '24h'
+          description: Time window for aggregation
+        - name: org
+          in: query
+          schema:
+            type: string
+          description: Organization ID (or use x-authensor-org header)
+        - name: env
+          in: query
+          schema:
+            type: string
+          description: Environment (or use x-authensor-env header)
+        - $ref: '#/components/parameters/OrgHeader'
+        - $ref: '#/components/parameters/EnvHeader'
+      responses:
+        '200':
+          description: Metrics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  window:
+                    type: string
+                  scope:
+                    type: object
+                    properties:
+                      org:
+                        type: string
+                      env:
+                        type: string
+                      mode:
+                        type: string
+                        enum: [scoped, global]
+                  receipts:
+                    type: object
+                    properties:
+                      by_status:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                      by_decision_outcome:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                  claims:
+                    type: object
+                    properties:
+                      conflicts:
+                        type: integer
+                      expired_reclaimed:
+                        type: integer
+                      attempts:
+                        type: integer
+                  ratios:
+                    type: object
+                    properties:
+                      deny_rate:
+                        type: number
+                      config_blocked_rate:
+                        type: number
+                        nullable: true
+                      claim_conflict_rate:
+                        type: number
+                        nullable: true
+                      expired_reclaim_rate:
+                        type: number
+                        nullable: true
+                      approval_required_rate:
+                        type: number
+                      approval_grant_rate:
+                        type: number
+                        nullable: true
+                  insights:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        severity:
+                          type: string
+                          enum: [info, warn]
+                        message:
+                          type: string
+                        evidence:
+                          type: object
+                          additionalProperties: true
+                        suggestions:
+                          type: array
+                          items:
+                            type: string
+                  generated_at:
+                    type: string
+                    format: date-time
+
+  # ════════════════════════════════════════════════════════════════
+  # Shadow
+  # ════════════════════════════════════════════════════════════════
+
+  /shadow/report:
+    get:
+      operationId: getShadowReport
+      summary: Get shadow policy divergence report
+      tags: [Shadow]
+      description: >
+        Returns statistics on how the shadow/canary policy diverges from the
+        active policy. Use this to safely evaluate policy changes before
+        promoting them. Admin only.
+      parameters:
+        - name: shadow_policy_id
+          in: query
+          schema:
+            type: string
+          description: Filter by shadow policy ID
+        - name: shadow_policy_version
+          in: query
+          schema:
+            type: string
+          description: Filter by shadow policy version
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only include evaluations after this timestamp
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Shadow divergence report
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  # ════════════════════════════════════════════════════════════════
+  # Aegis (Content Safety)
+  # ════════════════════════════════════════════════════════════════
+
+  /aegis/scan:
+    post:
+      operationId: scanContent
+      summary: Scan content for threats
+      tags: [Aegis]
+      description: >
+        Scans arbitrary text content for prompt injection, PII, secrets, and
+        other threats using the Aegis content safety scanner. Requires ingest
+        or admin role. Returns 503 if Aegis is not enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 200000
+                detectors:
+                  type: array
+                  items:
+                    type: string
+                  description: Specific detectors to run (omit for all)
+                mode:
+                  type: string
+                  enum: [block, redact, warn]
+                  description: How to handle detected threats
+      responses:
+        '200':
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '503':
+          description: Aegis is disabled or scanner unavailable
+
+  /aegis/scan-output:
+    post:
+      operationId: scanToolOutput
+      summary: Scan tool output for indirect prompt injection
+      tags: [Aegis]
+      description: >
+        Scans tool execution output for indirect prompt injection attacks
+        (OWASP ASI01). Optionally links the scan to a receipt ID and tool
+        name. Requires ingest or admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 200000
+                receiptId:
+                  type: string
+                  format: uuid
+                  description: Receipt ID to link the scan to
+                toolName:
+                  type: string
+                  maxLength: 256
+                  description: Name of the tool that produced the output
+      responses:
+        '200':
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '503':
+          description: Aegis is disabled or scanner unavailable
+
+  /aegis/scans:
+    get:
+      operationId: listScans
+      summary: List recent content scans
+      tags: [Aegis]
+      description: Returns recent Aegis scan results with optional filtering. Admin only.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: threatLevel
+          in: query
+          schema:
+            type: string
+          description: Filter by threat level
+        - name: safe
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+          description: Filter by safe/unsafe
+      responses:
+        '200':
+          description: Scan list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scans:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  count:
+                    type: integer
+
+  /aegis/scans/receipt/{id}:
+    get:
+      operationId: getScansForReceipt
+      summary: Get scans linked to a specific receipt
+      tags: [Aegis]
+      description: Returns all Aegis scans associated with a receipt ID. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Receipt scans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scans:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  count:
+                    type: integer
+
+  /aegis/stats:
+    get:
+      operationId: getAegisStats
+      summary: Get Aegis scanning statistics (24h)
+      tags: [Aegis]
+      description: Returns aggregated scanning statistics over the last 24 hours. Admin only.
+      responses:
+        '200':
+          description: Scanning statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /aegis/status:
+    get:
+      operationId: getAegisStatus
+      summary: Get Aegis scanner status
+      tags: [Aegis]
+      description: Returns whether Aegis is enabled, whether the scanner package is installed, rule count, and current mode. Admin only.
+      responses:
+        '200':
+          description: Scanner status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  scannerAvailable:
+                    type: boolean
+                  ruleCount:
+                    type: integer
+                  mode:
+                    type: string
+                    enum: [block, redact, warn]
+
+  # ════════════════════════════════════════════════════════════════
+  # Sentinel (Monitoring)
+  # ════════════════════════════════════════════════════════════════
+
+  /sentinel/status:
+    get:
+      operationId: getSentinelStatus
+      summary: Get Sentinel monitoring status
+      tags: [Sentinel]
+      description: Returns the current status of the Sentinel monitoring engine. Admin only.
+      responses:
+        '200':
+          description: Monitoring status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /sentinel/agents:
+    get:
+      operationId: listAgentStats
+      summary: List per-agent monitoring statistics
+      tags: [Sentinel]
+      description: >
+        Returns monitoring statistics for all agents, or a specific agent
+        when the agentId query param is provided. Admin only.
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific agent
+      responses:
+        '200':
+          description: Agent stats
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: Single agent (when agentId provided)
+                    additionalProperties: true
+                  - type: object
+                    description: All agents
+                    properties:
+                      agents:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      count:
+                        type: integer
+        '404':
+          description: Agent not found
+
+  /sentinel/agents/{id}:
+    get:
+      operationId: getAgentStats
+      summary: Get monitoring stats for a specific agent
+      tags: [Sentinel]
+      description: Returns detailed monitoring statistics for a single agent. Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent stats
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Agent not found
+
+  /sentinel/alerts:
+    get:
+      operationId: listAlerts
+      summary: List active and recent alerts
+      tags: [Sentinel]
+      description: Returns alerts with optional filtering by status, severity, and agent. Admin only.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by alert status
+        - name: severity
+          in: query
+          schema:
+            type: string
+          description: Filter by severity level
+        - name: agentId
+          in: query
+          schema:
+            type: string
+          description: Filter by agent ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  count:
+                    type: integer
+
+  /sentinel/alerts/{id}/ack:
+    post:
+      operationId: acknowledgeAlert
+      summary: Acknowledge an alert
+      tags: [Sentinel]
+      description: Marks an active alert as acknowledged. Admin only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  acknowledged:
+                    type: boolean
+                  alertId:
+                    type: string
+        '404':
+          description: Alert not found or already acknowledged
+
+  /sentinel/rules:
+    get:
+      operationId: getAlertRules
+      summary: Get alert rule configuration
+      tags: [Sentinel]
+      description: Returns the current set of alert rules used by the Sentinel engine. Admin only.
+      responses:
+        '200':
+          description: Alert rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  count:
+                    type: integer
+
+  # ════════════════════════════════════════════════════════════════
+  # Transparency
+  # ════════════════════════════════════════════════════════════════
+
+  /receipts/{id}/transparency:
+    get:
+      operationId: getTransparencyProof
+      summary: Get the transparency proof for a receipt
+      tags: [Transparency]
+      description: >
+        Returns the transparency log proof for a receipt, if the receipt has
+        been published to the transparency log. Returns 404 if transparency
+        logging is disabled or no proof exists. Admin only.
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Transparency proof
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: Invalid receipt ID format
+        '404':
+          description: Transparency disabled or proof not found
+
+  # ════════════════════════════════════════════════════════════════
+  # Dashboard (HTML)
+  # ════════════════════════════════════════════════════════════════
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: Admin dashboard (HTML)
+      tags: [Dashboard]
+      description: >
+        Returns the HTMX-powered admin dashboard with real-time receipt flow,
+        approval queue, and chain verification. Admin only.
+      responses:
+        '200':
+          description: HTML dashboard page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      summary: Dashboard stats cards (HTMX partial)
+      tags: [Dashboard]
+      description: Returns an HTML fragment with summary stat cards. Used by the dashboard via HTMX polling. Admin only.
+      responses:
+        '200':
+          description: HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /dashboard/approval-queue:
+    get:
+      operationId: getDashboardApprovalQueue
+      summary: Dashboard approval queue (HTMX partial)
+      tags: [Dashboard]
+      description: Returns an HTML fragment with the pending approval queue table. Admin only.
+      responses:
+        '200':
+          description: HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /dashboard/recent:
+    get:
+      operationId: getDashboardRecent
+      summary: Dashboard recent receipts (HTMX partial)
+      tags: [Dashboard]
+      description: Returns an HTML fragment with the 25 most recent receipts. Admin only.
+      responses:
+        '200':
+          description: HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+
+  # ════════════════════════════════════════════════════════════════
+  # Utility
+  # ════════════════════════════════════════════════════════════════
+
+  /:
+    get:
+      operationId: getRoot
+      summary: API root
+      tags: [Utility]
+      security: []
+      description: Returns the API name, version, and docs link.
+      responses:
+        '200':
+          description: API info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: Authensor Control Plane
+                  version:
+                    type: string
+                    example: 0.0.1
+                  docs:
+                    type: string
+                    example: /docs
+
+  /whoami:
+    get:
+      operationId: whoami
+      summary: Debug endpoint for authenticated key info
+      tags: [Utility]
+      description: Returns the key ID, role, name, and principal binding for the current API key. Any authenticated role.
+      responses:
+        '200':
+          description: Authenticated key info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyId:
+                    type: string
+                    format: uuid
+                  role:
+                    type: string
+                    enum: [ingest, executor, admin]
+                  name:
+                    type: string
+                  principalId:
+                    type: string
+                    nullable: true
