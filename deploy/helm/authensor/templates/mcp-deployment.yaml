@@ -1,0 +1,85 @@
+{{- if .Values.mcpServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "authensor.fullname" . }}-mcp-server
+  labels:
+    {{- include "authensor.mcpServer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcpServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "authensor.mcpServer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.mcpServer.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "authensor.mcpServer.labels" . | nindent 8 }}
+        {{- with .Values.mcpServer.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "authensor.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.mcpServer.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mcp-server
+          image: {{ include "authensor.mcpServer.image" . }}
+          imagePullPolicy: {{ .Values.mcpServer.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.mcpServer.securityContext | nindent 12 }}
+          ports:
+            - name: mcp
+              containerPort: {{ .Values.mcpServer.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.controlPlane.nodeEnv | quote }}
+            - name: CONTROL_PLANE_URL
+              value: "http://{{ include "authensor.fullname" . }}:{{ .Values.service.port }}"
+            {{- if .Values.mcpServer.existingCredentialsSecret }}
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mcpServer.existingCredentialsSecret }}
+                  key: STRIPE_SECRET_KEY
+                  optional: true
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mcpServer.existingCredentialsSecret }}
+                  key: GITHUB_TOKEN
+                  optional: true
+            {{- end }}
+            {{- with .Values.mcpServer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.mcpServer.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.mcpServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.mcpServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.mcpServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

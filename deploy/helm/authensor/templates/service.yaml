@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "authensor.fullname" . }}
+  labels:
+    {{- include "authensor.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "authensor.controlPlane.selectorLabels" . | nindent 4 }}
+---
+{{- if .Values.mcpServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "authensor.fullname" . }}-mcp
+  labels:
+    {{- include "authensor.mcpServer.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.mcpPort }}
+      targetPort: mcp
+      protocol: TCP
+      name: mcp
+  selector:
+    {{- include "authensor.mcpServer.selectorLabels" . | nindent 4 }}
+{{- end }}

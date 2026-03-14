@@ -1,0 +1,56 @@
+===============================================================================
+  Authensor — AI Agent Safety Stack
+===============================================================================
+
+1. Control Plane:
+
+{{- if .Values.ingress.enabled }}
+  Access the control plane at:
+  {{- range .Values.ingress.hosts }}
+    https://{{ .host }}
+  {{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  Get the control plane URL:
+    export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "authensor.fullname" . }})
+    export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+    echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  Get the control plane URL (may take a few minutes for the LoadBalancer IP):
+    kubectl get svc --namespace {{ .Release.Namespace }} {{ include "authensor.fullname" . }} -w
+{{- else }}
+  Access the control plane via port-forward:
+    kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "authensor.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+    echo "Control plane: http://127.0.0.1:{{ .Values.service.port }}"
+{{- end }}
+
+2. Health Check:
+    curl http://127.0.0.1:{{ .Values.service.port }}/health
+
+{{- if .Values.mcpServer.enabled }}
+
+3. MCP Server:
+  Access the MCP server via port-forward:
+    kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "authensor.fullname" . }}-mcp {{ .Values.service.mcpPort }}:{{ .Values.service.mcpPort }}
+{{- end }}
+
+{{- if and (not .Values.existingSecret) (not .Values.bootstrapAdminToken) }}
+
+  WARNING: No bootstrap admin token is set. The control plane will start in
+  bootstrap-required mode. All endpoints except /health will return 503 until
+  an admin API key is created.
+
+  To set a bootstrap token:
+    helm upgrade {{ .Release.Name }} authensor/authensor \
+      --set bootstrapAdminToken="your-secure-token"
+{{- end }}
+
+{{- if .Values.autoscaling.enabled }}
+
+4. Autoscaling:
+  HPA is enabled ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas)
+    kubectl get hpa --namespace {{ .Release.Namespace }} {{ include "authensor.fullname" . }}-control-plane
+{{- end }}
+
+===============================================================================
+  Documentation: https://github.com/authensor/authensor
+===============================================================================
