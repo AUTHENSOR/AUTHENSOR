@@ -5,7 +5,7 @@ Provides a decorator and guard class to evaluate CrewAI tool/task
 executions against Authensor policies.
 
 Usage:
-    from authensor_guard import AuthensorGuard
+    from authensor_crewai import AuthensorGuard
 
     guard = AuthensorGuard("http://localhost:3000")
 
