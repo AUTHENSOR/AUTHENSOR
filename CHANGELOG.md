@@ -1,3 +1,49 @@
+## [1.5.0-alpha.2] - 2026-03-14
+
+### New Packages
+- **@authensor/sentinel**: Real-time behavioral monitoring with EWMA and CUSUM statistical methods. Per-agent baselines, deny rate/latency/volume anomaly detection, chain depth and fan-out alerts. Zero dependencies.
+- **@authensor/aegis** (expanded): Now 15+ prompt injection detection rules, 22 MINJA-informed memory poisoning rules, PII detection, credential scanning, exfiltration detection, multimodal safety.
+- **@authensor/langchain**: LangChain/LangGraph interrupt integration adapter
+- **@authensor/openai**: OpenAI Agents SDK guardrail adapter
+- **@authensor/vercel-ai-sdk**: Vercel AI SDK middleware adapter
+- **@authensor/claude-agent-sdk**: Claude Agent SDK guard adapter
+- **authensor-crewai**: CrewAI Python adapter
+
+### MCP Gateway — SEP Authorization Protocol
+- **authorization/propose**: Client proposes action envelope before tool call
+- **authorization/decide**: Gateway returns policy decision with receiptId
+- **authorization/receipt**: Gateway emits receipt notification after execution
+- Backward compatible: clients without authorization capability fall back to inline evaluation
+- Pending authorization tracking with 5-minute TTL and stale cleanup
+- authorizationId validation on tools/call (existence, expiry, tool name match)
+
+### Control Plane Enhancements
+- **Shadow/canary policy evaluation**: Test new policies alongside production without affecting enforcement
+- **TOCTOU protection**: Re-evaluates approved actions against current policy on claim
+- **Principal binding**: API keys bound to specific agent identities with strict binding mode
+- **Sigstore/Rekor**: Optional transparency log integration for receipt verification
+- **Cross-agent tracing**: parentReceiptId linking across delegation chains
+- **Rate-limit webhook**: Configurable webhook alerts when rate limits are hit
+- **Fail-closed without policy**: Returns deny when no policy is loaded, with policy-missing alerts
+
+### Policy Engine
+- **Session forbidden sequences**: Glob-matched sequence detection
+- **Session risk scoring**: Cumulative risk scoring across session
+- **Budget enforcement**: Per-principal daily/weekly/monthly spend limits with per-action cost caps
+- **Max actions per session**: Configurable session action limits
+
+### Testing
+- **924+ tests** across 16 packages (up from ~400)
+- Full OWASP Agentic Top 10 (2026) coverage verification
+- MCP Gateway SEP protocol tests
+- Sentinel behavioral monitoring tests
+- Aegis content safety scanner tests
+
+### Compliance
+- **OWASP Agentic Top 10 (2026)**: 10/10 coverage (ASI01-ASI10)
+- **EU AI Act**: Mapped to Articles 9, 12, 13, 14 (high-risk deadline: August 2, 2026)
+- **SOC 2**: Immutable audit trail, RBAC, rate limiting
+
 ## [1.5.0-alpha] - 2026-01-08
 
 ### Bug Fixes
