@@ -1,0 +1,61 @@
+{
+  "name": "@authensor/sentinel",
+  "version": "0.0.1",
+  "description": "Real-time monitoring and anomaly detection for AI agents — behavioral baselines, cost tracking, alert rules",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0",
+    "@types/node": "^20.10.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "keywords": [
+    "authensor",
+    "sentinel",
+    "monitoring",
+    "anomaly-detection",
+    "agent-safety",
+    "ai-safety",
+    "guardrails",
+    "ewma",
+    "cusum",
+    "behavioral-monitoring",
+    "agent-monitoring",
+    "real-time-monitoring",
+    "alerting",
+    "agentic-ai",
+    "observability",
+    "drift-detection"
+  ],
+  "author": {
+    "name": "John Kearney",
+    "url": "https://github.com/jkearney"
+  },
+  "bugs": {
+    "url": "https://github.com/authensor/authensor/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/sentinel"
+  },
+  "homepage": "https://authensor.com",
+  "publishConfig": { "access": "public" }
+}
