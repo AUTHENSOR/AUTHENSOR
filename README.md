@@ -12,7 +12,7 @@
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
   </a>
   <a href="https://github.com/authensor/authensor/actions">
-    <img src="https://img.shields.io/badge/tests-924%20passing-brightgreen.svg" alt="Tests: 924 passing">
+    <img src="https://img.shields.io/badge/tests-924%2B%20passing-brightgreen.svg" alt="Tests: 924+ passing">
   </a>
   <a href="https://www.npmjs.com/org/authensor">
     <img src="https://img.shields.io/badge/npm-%40authensor-red.svg" alt="npm: @authensor">
@@ -43,13 +43,14 @@ Existing guardrails focus on what models *say* (prompt/response filtering). Auth
 
 ## The Solution
 
-Authensor is three open-source tools that together cover the full surface area of agent risk:
+Authensor is four open-source tools that together cover the full surface area of agent risk:
 
 | Tool | What it guards | How |
 |------|---------------|-----|
 | **Authensor** | Agent actions (API calls, tool use, data access) | Policy engine + control plane with hash-chained receipts |
 | **[SpiroGrapher](https://github.com/authensor/spirographer)** | Agent web browsing | Compiles HTML to structured IR, detects dark patterns, constitutional rules |
 | **[SafeClaw](https://github.com/authensor/safeclaw)** | Local agent execution | PreToolUse hook gating, deny-by-default, mobile approval workflows |
+| **[SiteSitter](https://github.com/AUTHENSOR/SiteSitter)** | Website safety monitoring | Continuous governance for deployed sites |
 
 ## Quickstart
 
@@ -121,12 +122,17 @@ const guardrail = new AuthensorGuardrail({ controlPlaneUrl: '...' });
 // OpenAI Agents SDK
 import { AuthensorGuardrail } from '@authensor/openai';
 
-// CrewAI — coming soon
+// CrewAI
+import { AuthensorGuardrail } from '@authensor/crewai';
+
 // Vercel AI SDK
 import { AuthensorGuardrail } from '@authensor/vercel-ai-sdk';
 
 // Claude Agent SDK
 import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
+
+// Claude Code (hooks-based integration)
+// See docs/claude-code-hooks.md
 ```
 
 ## Why Authensor
@@ -150,7 +156,7 @@ import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
 | Session-level threat detection | Yes (forbidden sequences, risk scoring) | No | No | No | No |
 | Budget enforcement | Yes (per-principal spending limits) | No | No | No | No |
 | Shadow/canary policy testing | Yes | No | No | No | No |
-| Framework adapters | 5 (LangChain, OpenAI, CrewAI, Vercel AI, Claude) | 1 (Bedrock) | 1 (custom) | 1 (custom) | 1 (custom) |
+| Framework adapters | 8 (LangChain, OpenAI, Vercel AI, Claude Agent, CrewAI, Claude Code, TS SDK, Python SDK) | 1 (Bedrock) | 1 (custom) | 1 (custom) | 1 (custom) |
 
 ### Key differentiators
 
@@ -169,7 +175,7 @@ import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
 
 4. **Fail-closed by default.** No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. This matches OWASP and NIST recommendations.
 
-5. **Cross-provider.** Works with Claude, GPT, LangChain, CrewAI, Vercel AI, or any agent framework. One safety layer for all your agents.
+5. **Cross-provider.** Works with Claude, GPT, LangChain, CrewAI, Vercel AI, Claude Code, or any agent framework. Eight adapters, one safety layer for all your agents.
 
 ## Architecture
 
@@ -191,10 +197,20 @@ import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
 │                                        │                              │
 │  ┌────────────┐  ┌────────────┐  ┌─────▼──────┐  ┌──────────────┐   │
 │  │  SafeClaw  │  │ SpiroGrapher│  │  Receipts  │  │   Adapters   │   │
-│  │(local gate)│  │(web govern) │  │(hash chain)│  │(5 frameworks)│   │
+│  │(local gate)│  │(web govern) │  │(hash chain)│  │(8 adapters)  │   │
 │  └────────────┘  └────────────┘  └────────────┘  └──────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Five Layers
+
+| Layer | Package | What It Does | Dependencies |
+|-------|---------|-------------|--------------|
+| **Policy Engine** | `@authensor/engine` | Session rules, budget evaluation, constraint enforcement. Pure, synchronous, deterministic. | 0 |
+| **Aegis Content Scanner** | `@authensor/aegis` | 15+ prompt injection rules, 22 MINJA memory poisoning rules, PII/credential scanning, exfiltration detection, multimodal safety. | 0 |
+| **Sentinel Behavioral Monitor** | `@authensor/sentinel` | EWMA/CUSUM baselines, deny-rate/latency/volume anomaly detection, chain depth and fan-out alerts. | 0 |
+| **Control Plane** | `@authensor/control-plane` | Hono + PostgreSQL HTTP API. Shadow/canary eval, TOCTOU protection, principal binding, Sigstore/Rekor integration. | Hono, pg |
+| **MCP Gateway** | `@authensor/mcp-server` | SEP authorization protocol (`authorization/propose`, `authorization/decide`, `authorization/receipt`). | — |
 
 ### How it works
 
@@ -273,6 +289,8 @@ Action executes (or doesn't) → receipt updated
 | `@authensor/sdk` | TypeScript SDK for agent builders | — |
 | `authensor` | CLI: `authensor policy lint`, `authensor policy test`, `authensor policy diff` | — |
 | `authensor` (Python) | Python SDK | — |
+| `create-authensor` | Project scaffolder: `npx create-authensor` | — |
+| `@authensor/redteam` | Adversarial red-team test seeds (15 attack patterns, 5 categories, MITRE ATLAS mapped) | 0 |
 
 ### Framework Adapters
 
@@ -282,7 +300,10 @@ Action executes (or doesn't) → receipt updated
 | `@authensor/openai` | OpenAI Agents SDK | Pre-execution guardrail |
 | `@authensor/vercel-ai-sdk` | Vercel AI SDK | Middleware integration |
 | `@authensor/claude-agent-sdk` | Claude Agent SDK | Tool-use guardrail |
-| `@authensor/crewai` | CrewAI | Task guardrail (coming soon) |
+| `@authensor/crewai` | CrewAI | Task guardrail |
+| — | Claude Code | Hooks-based PreToolUse / PostToolUse integration |
+| `@authensor/sdk` | TypeScript SDK | Direct integration for any TS agent |
+| `authensor` (Python) | Python SDK | Direct integration for any Python agent |
 
 ### Companion Tools
 
@@ -290,6 +311,7 @@ Action executes (or doesn't) → receipt updated
 |------|-------------|
 | [SafeClaw](https://github.com/authensor/safeclaw) | Local agent gating with PreToolUse hooks, mobile PWA dashboard, swipe-to-approve |
 | [SpiroGrapher](https://github.com/authensor/spirographer) | Web governance: HTML→IR compilation, 26 constitutional rules, dark pattern detection |
+| [SiteSitter](https://github.com/AUTHENSOR/SiteSitter) | Website safety monitoring and governance |
 
 ## Features
 
@@ -350,7 +372,7 @@ Authensor addresses all 10 risks in the [OWASP Top 10 for Agentic Applications (
 | OWASP Risk | Authensor Coverage |
 |---|---|
 | ASI01: Agent Goal Hijacking | Aegis pre-eval scanning + policy engine evaluates action intent, not input text |
-| ASI02: Tool Misuse & Exploitation | Per-tool policies, parameter constraints, rate limits, budget caps |
+| ASI02: Tool Misuse | Per-tool policies, parameter constraints, rate limits, budget caps |
 | ASI03: Identity & Privilege Abuse | Principal binding, RBAC, ABAC conditions, session risk scoring |
 | ASI04: Supply Chain Vulnerabilities | MCP tool governance, domain allowlisting, SSRF protection |
 | ASI05: Unexpected Code Execution | Deny-by-default, explicit allowlisting, SafeClaw container mode |
@@ -366,7 +388,7 @@ See [full OWASP alignment document](docs/owasp-agentic-alignment.md) for detaile
 
 Authensor's architecture maps directly to major regulatory requirements:
 
-- **EU AI Act** (Aug 2026 deadline): Article 12 logging → receipt chain, Article 14 human oversight → approval workflows. See [compliance guide](docs/eu-ai-act-compliance.md).
+- **EU AI Act** (August 2, 2026 deadline): Article 12 logging → receipt chain, Article 14 human oversight → approval workflows. See [compliance guide](docs/eu-ai-act-compliance.md).
 - **SOC 2**: Immutable audit trail, RBAC, rate limiting, access logging
 - **SOX**: Segregation of duties via approval workflows, receipt retention support
 - **HIPAA**: Action-level audit logging, access controls, principal binding
@@ -425,7 +447,7 @@ pnpm install
 docker compose up -d    # Postgres + control plane
 pnpm dev                # Dev servers with hot reload
 
-# Test (924 tests across 10 packages)
+# Test (924+ tests across 16 packages)
 pnpm test
 
 # Build all packages
