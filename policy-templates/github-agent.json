@@ -1,0 +1,126 @@
+{
+  "id": "github-agent-safety",
+  "name": "GitHub Agent Safety Policy",
+  "description": "Controls for agents that interact with GitHub — creating issues, PRs, managing repos. Scopes access to specific repos, blocks destructive operations, requires approval for public-facing actions.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["github.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-read-ops",
+      "effect": "allow",
+      "description": "Allow reading repos, issues, PRs, and code",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-create-issue",
+      "effect": "require_approval",
+      "description": "Creating issues needs approval (public-facing)",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "github.issues.create"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-create-pr",
+      "effect": "require_approval",
+      "description": "Creating pull requests needs approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "github.pulls.create"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-comment",
+      "effect": "require_approval",
+      "description": "Commenting on issues/PRs needs approval (public-facing)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "github.issues.comment",
+          "github.pulls.comment",
+          "github.pulls.review"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-merge",
+      "effect": "require_approval",
+      "description": "Merging PRs needs approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "github.pulls.merge"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "2h"
+      }
+    },
+    {
+      "id": "deny-repo-delete",
+      "effect": "deny",
+      "description": "Block repository deletion",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "github.repos.delete"
+      }
+    },
+    {
+      "id": "deny-force-push",
+      "effect": "deny",
+      "description": "Block force push (destructive to history)",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "github.git.push.force"
+      }
+    },
+    {
+      "id": "deny-settings",
+      "effect": "deny",
+      "description": "Block repo settings changes (visibility, branch protection)",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "github\\.repos\\.(settings|visibility|protection).*"
+      }
+    },
+    {
+      "id": "deny-webhooks",
+      "effect": "deny",
+      "description": "Block webhook creation (exfiltration vector)",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "github\\.repos\\.hooks.*"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI04"],
+    "category": "github"
+  }
+}

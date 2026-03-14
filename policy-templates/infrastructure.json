@@ -1,0 +1,111 @@
+{
+  "id": "infrastructure-safety",
+  "name": "Infrastructure Agent Safety Policy",
+  "description": "Controls for agents managing cloud infrastructure (AWS, GCP, Azure). Requires approval for resource creation, blocks deletion of critical resources, enforces cost caps.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["aws.*", "gcp.*", "azure.*", "infra.*", "cloud.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-describe-list",
+      "effect": "allow",
+      "description": "Allow describing and listing cloud resources",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-create-resources",
+      "effect": "require_approval",
+      "description": "Creating cloud resources needs approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "create"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-update-resources",
+      "effect": "require_approval",
+      "description": "Updating cloud resources needs approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "update"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-delete-dual",
+      "effect": "require_approval",
+      "description": "Deleting cloud resources needs dual approval",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "delete"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "4h"
+      }
+    },
+    {
+      "id": "deny-iam-changes",
+      "effect": "deny",
+      "description": "Block IAM/permission changes (must be done by humans)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "aws.iam.createuser",
+          "aws.iam.deleteuser",
+          "aws.iam.attachpolicy",
+          "aws.iam.createrole",
+          "gcp.iam.setpolicy",
+          "azure.ad.createrole"
+        ]
+      }
+    },
+    {
+      "id": "deny-vpc-network",
+      "effect": "deny",
+      "description": "Block network topology changes (VPC, subnets, security groups)",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "(aws\\.ec2\\.(create|delete)(vpc|subnet|securitygroup))|(gcp\\.compute\\.network)|(azure\\.network)"
+      }
+    },
+    {
+      "id": "rate-limit-infra",
+      "effect": "allow",
+      "description": "Rate limit infrastructure operations",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "aws."
+      },
+      "rateLimit": {
+        "requests": 50,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI02", "ASI03", "ASI08"],
+    "compliance": ["SOC2", "ISO27001"],
+    "category": "infrastructure"
+  }
+}

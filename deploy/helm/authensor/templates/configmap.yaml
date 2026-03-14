@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "authensor.configMapName" . }}
+  labels:
+    {{- include "authensor.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.controlPlane.nodeEnv | quote }}
+  PORT: {{ .Values.controlPlane.port | quote }}
+  AUTHENSOR_ALLOW_FALLBACK_POLICY: {{ .Values.controlPlane.allowFallbackPolicy | quote }}
+  AUTHENSOR_SANDBOX_MODE: {{ .Values.controlPlane.sandboxMode | quote }}
+  {{- if .Values.controlPlane.skipDefaultPolicy }}
+  AUTHENSOR_SKIP_DEFAULT_POLICY: "true"
+  {{- end }}
+  {{- if .Values.aegis.enabled }}
+  AUTHENSOR_AEGIS_ENABLED: "true"
+  {{- end }}
+  {{- if .Values.sentinel.enabled }}
+  AUTHENSOR_SENTINEL_ENABLED: "true"
+  {{- end }}

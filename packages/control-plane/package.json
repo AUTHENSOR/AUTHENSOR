@@ -1,0 +1,69 @@
+{
+  "name": "@authensor/control-plane",
+  "version": "0.0.1",
+  "description": "Authensor Control Plane API - HTTP wrapper around the engine",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@authensor/engine": "workspace:*",
+    "@authensor/schemas": "workspace:*",
+    "@hono/node-server": "^1.8.0",
+    "@hono/zod-validator": "^0.2.0",
+    "drizzle-orm": "^0.29.0",
+    "hono": "^4.0.0",
+    "pg": "^8.11.0",
+    "zod": "^3.22.0"
+  },
+  "optionalDependencies": {
+    "@authensor/aegis": "workspace:*",
+    "@authensor/sentinel": "workspace:*",
+    "@opentelemetry/api": "^1.7.0",
+    "sigstore": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.0",
+    "drizzle-kit": "^0.20.0",
+    "pg-mem": "^3.0.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "authensor",
+    "control-plane",
+    "api"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/control-plane"
+  },
+  "homepage": "https://github.com/authensor/authensor",
+  "publishConfig": {
+    "access": "public"
+  }
+}

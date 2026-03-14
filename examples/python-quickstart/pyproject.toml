@@ -1,0 +1,13 @@
+[project]
+name = "authensor-python-quickstart"
+version = "0.0.1"
+description = "Python quickstart example for Authensor"
+requires-python = ">=3.10"
+dependencies = [
+    "authensor",
+    "httpx>=0.25.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

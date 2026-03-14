@@ -1,0 +1,79 @@
+{
+  "id": "research-browsing-safety",
+  "name": "Research & Browsing Agent Policy",
+  "description": "Controls for agents that browse the web, make API calls, and scrape data. Enforces domain allowlisting, blocks SSRF, and limits request volume. Pairs with SiteSitter for web content governance.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["http.*", "web.*", "browser.*", "api.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-get-requests",
+      "effect": "allow",
+      "description": "Allow GET requests to allowed domains",
+      "condition": {
+        "all": [
+          { "field": "action.type", "operator": "in", "value": ["http.get", "web.fetch", "browser.navigate"] },
+          { "field": "action.operation", "operator": "eq", "value": "read" }
+        ]
+      }
+    },
+    {
+      "id": "approve-post-requests",
+      "effect": "require_approval",
+      "description": "POST/PUT requests need approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": ["http.post", "http.put", "http.patch", "api.call"]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "deny-delete-requests",
+      "effect": "deny",
+      "description": "Block HTTP DELETE requests",
+      "condition": {
+        "field": "action.type",
+        "operator": "eq",
+        "value": "http.delete"
+      }
+    },
+    {
+      "id": "deny-file-downloads",
+      "effect": "deny",
+      "description": "Block downloading executable files",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "web.download.executable",
+          "browser.download"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-requests",
+      "effect": "allow",
+      "description": "Rate limit HTTP requests to prevent abuse",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "http."
+      },
+      "rateLimit": {
+        "requests": 100,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI04", "ASI06"],
+    "category": "research"
+  }
+}

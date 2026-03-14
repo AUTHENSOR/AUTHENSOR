@@ -1,0 +1,24 @@
+[project]
+name = "authensor-crewai"
+version = "0.0.1"
+description = "Authensor guardrail adapter for CrewAI"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["authensor", "crewai", "guardrail", "ai-safety"]
+dependencies = [
+    "authensor>=0.0.1",
+]
+
+[project.optional-dependencies]
+crewai = ["crewai>=0.30.0"]
+
+[project.urls]
+Homepage = "https://github.com/authensor/authensor"
+Repository = "https://github.com/authensor/authensor"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

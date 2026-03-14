@@ -1,0 +1,104 @@
+{
+  "id": "eu-ai-act-high-risk",
+  "name": "EU AI Act High-Risk Compliance Policy",
+  "description": "Policy template for AI systems classified as high-risk under EU AI Act Annex III. Enforces Article 12 (logging), Article 14 (human oversight), Article 9 (risk management), and Article 13 (transparency). Deadline: August 2, 2026.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "environments": ["production", "staging"]
+  },
+  "rules": [
+    {
+      "id": "allow-reads-with-logging",
+      "effect": "allow",
+      "description": "Allow read operations (all actions produce receipts for Article 12 logging)",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      }
+    },
+    {
+      "id": "approve-all-creates",
+      "effect": "require_approval",
+      "description": "Article 14: All creation actions require human oversight",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "create"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "2h"
+      }
+    },
+    {
+      "id": "approve-all-updates",
+      "effect": "require_approval",
+      "description": "Article 14: All update actions require human oversight",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "update"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "2h"
+      }
+    },
+    {
+      "id": "approve-deletes-dual",
+      "effect": "require_approval",
+      "description": "Article 14: Deletion requires dual human oversight",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "delete"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "4h"
+      }
+    },
+    {
+      "id": "approve-executions-dual",
+      "effect": "require_approval",
+      "description": "Article 14: Arbitrary execution requires dual human oversight",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "execute"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "rate-limit-all",
+      "effect": "allow",
+      "description": "Article 9: Rate limiting as risk mitigation measure",
+      "condition": {
+        "field": "action.type",
+        "operator": "exists",
+        "value": true
+      },
+      "rateLimit": {
+        "requests": 100,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI03", "ASI08", "ASI09", "ASI10"],
+    "compliance": ["EU-AI-Act", "ISO-42001"],
+    "articles": {
+      "article9": "Risk management via rate limiting and deny-by-default",
+      "article12": "All actions produce receipts with hash-chained audit trail",
+      "article13": "Decision reasons recorded in receipt.decision.reason",
+      "article14": "Human oversight via require_approval for all mutations"
+    },
+    "category": "compliance"
+  }
+}

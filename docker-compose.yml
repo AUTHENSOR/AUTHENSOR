@@ -1,0 +1,126 @@
+# Authensor Self-Hosted Stack
+#
+# Everything runs locally. No external services required.
+#
+# Quick start:
+#   docker compose up -d            # Start Postgres + Control Plane
+#   docker compose logs control-plane  # See your admin token
+#   curl http://localhost:3000/health  # Verify it's running
+#
+# With MCP Server (optional):
+#   docker compose --profile mcp up -d
+#
+# The control plane will be available at http://localhost:3000
+# An admin API key is auto-created on first run and printed to logs.
+#
+# Configuration:
+#   Copy .env.example to .env and customize, or set env vars inline.
+#   See docs/self-hosting.md for full configuration reference.
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────
+  # Stores receipts, policies, API keys, approvals, and audit trails.
+  # Data is persisted in a Docker volume (authensor_pgdata).
+  postgres:
+    image: postgres:16-alpine
+    container_name: authensor-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-authensor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-authensor_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-authensor}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - authensor_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-authensor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Control Plane ───────────────────────────────────────────────
+  # The core Authensor service. Evaluates action envelopes against
+  # policies, manages receipts and approvals, and enforces rate limits.
+  #
+  # On first boot:
+  #   1. Runs all database migrations
+  #   2. Creates a bootstrap admin API key (printed to logs)
+  #   3. Provisions the default-safe policy (deny-by-default)
+  #
+  # After boot, use the admin key to create policies and agent keys:
+  #   curl -H "Authorization: Bearer <admin-key>" http://localhost:3000/keys
+  control-plane:
+    build:
+      context: .
+      dockerfile: packages/control-plane/Dockerfile
+    container_name: authensor-control-plane
+    ports:
+      - "${AUTHENSOR_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-authensor}:${POSTGRES_PASSWORD:-authensor_dev}@postgres:5432/${POSTGRES_DB:-authensor}
+      PORT: 3000
+
+      # ── Bootstrap ──────────────────────────────────────────────
+      # Auto-creates an admin API key on first run. The key value
+      # is printed to stdout. Set to any string (used as the key).
+      AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN: ${AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN:-authensor_bootstrap_secret}
+
+      # ── Safety defaults ────────────────────────────────────────
+      # Fail-closed: deny all actions if no policy is loaded.
+      AUTHENSOR_ALLOW_FALLBACK_POLICY: ${AUTHENSOR_ALLOW_FALLBACK_POLICY:-false}
+
+      # ── Content safety (Aegis) ─────────────────────────────────
+      # Scans action envelopes for prompt injection, jailbreak
+      # attempts, PII, and memory poisoning before policy evaluation.
+      AUTHENSOR_AEGIS_ENABLED: ${AUTHENSOR_AEGIS_ENABLED:-true}
+
+      # ── Real-time monitoring (Sentinel) ────────────────────────
+      # Tracks per-agent baselines, detects anomalies (EWMA/CUSUM),
+      # fires alerts on deny rate spikes, latency, and chain depth.
+      AUTHENSOR_SENTINEL_ENABLED: ${AUTHENSOR_SENTINEL_ENABLED:-true}
+
+      # ── Observability (OpenTelemetry) ──────────────────────────
+      # Export spans and metrics to any OTLP-compatible backend.
+      # Requires @opentelemetry/api to be installed (included).
+      AUTHENSOR_OTEL_ENABLED: ${AUTHENSOR_OTEL_ENABLED:-false}
+
+      # ── Transparency log (Sigstore/Rekor) ──────────────────────
+      # Publish receipt hashes to the Sigstore public transparency log.
+      AUTHENSOR_TRANSPARENCY_ENABLED: ${AUTHENSOR_TRANSPARENCY_ENABLED:-false}
+
+      # ── TOCTOU protection ──────────────────────────────────────
+      # Re-evaluate approved actions against current policy on claim.
+      AUTHENSOR_TOCTOU_REEVALUATE: ${AUTHENSOR_TOCTOU_REEVALUATE:-true}
+
+      # ── Rate limits ────────────────────────────────────────────
+      AUTHENSOR_RL_INGEST_PER_MIN: ${AUTHENSOR_RL_INGEST_PER_MIN:-120}
+      AUTHENSOR_RL_EXECUTOR_PER_MIN: ${AUTHENSOR_RL_EXECUTOR_PER_MIN:-60}
+      AUTHENSOR_RL_ADMIN_PER_MIN: ${AUTHENSOR_RL_ADMIN_PER_MIN:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── MCP Server (optional) ──────────────────────────────────────
+  # Exposes Authensor-governed MCP tools (Stripe, GitHub, HTTP).
+  # Activate with: docker compose --profile mcp up -d
+  mcp-server:
+    profiles: ["mcp"]
+    build:
+      context: .
+      dockerfile: packages/mcp-server/Dockerfile
+    container_name: authensor-mcp-server
+    ports:
+      - "${MCP_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      CONTROL_PLANE_URL: http://control-plane:3000
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on:
+      control-plane:
+        condition: service_healthy
+
+volumes:
+  authensor_pgdata:

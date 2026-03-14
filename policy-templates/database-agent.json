@@ -1,0 +1,117 @@
+{
+  "id": "database-agent-safety",
+  "name": "Database Agent Safety Policy",
+  "description": "Controls for agents executing SQL queries or interacting with databases. Blocks DDL, limits query scope, requires approval for writes. Addresses OWASP ASI02 (tool misuse) and ASI05 (RCE via SQL injection).",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["database.*", "sql.*", "nosql.*"]
+  },
+  "rules": [
+    {
+      "id": "allow-select",
+      "effect": "allow",
+      "description": "Allow SELECT queries (read-only)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": ["database.query.select", "sql.select", "nosql.find", "nosql.aggregate"]
+      }
+    },
+    {
+      "id": "approve-insert",
+      "effect": "require_approval",
+      "description": "INSERT operations require approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": ["database.query.insert", "sql.insert", "nosql.insert"]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-update",
+      "effect": "require_approval",
+      "description": "UPDATE operations require approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": ["database.query.update", "sql.update", "nosql.update"]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-delete",
+      "effect": "require_approval",
+      "description": "DELETE operations require dual approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": ["database.query.delete", "sql.delete", "nosql.delete"]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "deny-ddl",
+      "effect": "deny",
+      "description": "Block all DDL operations (CREATE TABLE, DROP, ALTER, TRUNCATE)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "database.ddl.create",
+          "database.ddl.drop",
+          "database.ddl.alter",
+          "database.ddl.truncate",
+          "sql.create.table",
+          "sql.drop",
+          "sql.alter",
+          "sql.truncate"
+        ]
+      }
+    },
+    {
+      "id": "deny-admin",
+      "effect": "deny",
+      "description": "Block database admin operations",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "database.admin.grant",
+          "database.admin.revoke",
+          "database.admin.createuser",
+          "database.admin.dropuser"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-queries",
+      "effect": "allow",
+      "description": "Rate limit queries to prevent resource exhaustion",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "database."
+      },
+      "rateLimit": {
+        "requests": 500,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI02", "ASI05"],
+    "category": "database"
+  }
+}

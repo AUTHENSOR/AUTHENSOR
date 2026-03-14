@@ -1,0 +1,46 @@
+{
+  "id": "production-lockdown",
+  "name": "Production Lockdown Policy",
+  "description": "Maximum security policy for production environments. Only explicitly allowlisted actions execute. Everything else is denied. Dual approval required for any mutation. Use this as a starting point and add specific allow rules for your agent's needs.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "environments": ["production"]
+  },
+  "rules": [
+    {
+      "id": "approve-all-mutations",
+      "effect": "require_approval",
+      "description": "Any non-read action requires dual approval in production",
+      "condition": {
+        "field": "action.operation",
+        "operator": "in",
+        "value": ["create", "update", "delete", "execute"]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "rate-limit-reads",
+      "effect": "allow",
+      "description": "Allow reads but rate limit aggressively",
+      "condition": {
+        "field": "action.operation",
+        "operator": "eq",
+        "value": "read"
+      },
+      "rateLimit": {
+        "requests": 50,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI03", "ASI05", "ASI08", "ASI10"],
+    "compliance": ["SOC2", "SOX", "EU-AI-Act"],
+    "category": "production"
+  }
+}

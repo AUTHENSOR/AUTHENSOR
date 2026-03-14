@@ -1,0 +1,128 @@
+{
+  "id": "healthcare-agent-safety",
+  "name": "Healthcare Agent Safety Policy (HIPAA)",
+  "description": "Controls for agents handling Protected Health Information (PHI). Enforces minimum necessary access, requires approval for PHI disclosure, and maintains comprehensive audit trails for HIPAA compliance.",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "scope": {
+    "actionTypes": ["ehr.*", "health.*", "patient.*", "medical.*"],
+    "environments": ["production", "staging"]
+  },
+  "rules": [
+    {
+      "id": "allow-read-non-phi",
+      "effect": "allow",
+      "description": "Allow reading non-PHI data (schedules, facility info, formulary)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "health.schedule.read",
+          "health.facility.read",
+          "health.formulary.read",
+          "health.provider.read"
+        ]
+      }
+    },
+    {
+      "id": "approve-read-phi",
+      "effect": "require_approval",
+      "description": "Reading patient records (PHI) requires authorization",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "patient.record.read",
+          "ehr.chart.read",
+          "medical.history.read",
+          "patient.demographics.read"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-update-phi",
+      "effect": "require_approval",
+      "description": "Updating patient records requires authorization and audit",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "patient.record.update",
+          "ehr.chart.update",
+          "medical.notes.create"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "1h"
+      }
+    },
+    {
+      "id": "approve-phi-disclosure",
+      "effect": "require_approval",
+      "description": "PHI disclosure (sharing, printing, faxing) requires dual approval",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "patient.record.share",
+          "patient.record.print",
+          "patient.record.fax",
+          "patient.record.export"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 2,
+        "expiresIn": "4h"
+      }
+    },
+    {
+      "id": "deny-phi-bulk",
+      "effect": "deny",
+      "description": "Block bulk PHI operations (minimum necessary principle)",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "patient.record.bulk.read",
+          "patient.record.bulk.export",
+          "ehr.chart.bulk.read"
+        ]
+      }
+    },
+    {
+      "id": "deny-phi-delete",
+      "effect": "deny",
+      "description": "Block PHI deletion (retention requirements)",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "(patient|ehr|medical)\\..+\\.delete"
+      }
+    },
+    {
+      "id": "rate-limit-phi-access",
+      "effect": "allow",
+      "description": "Rate limit PHI access to detect anomalous patterns",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "patient."
+      },
+      "rateLimit": {
+        "requests": 20,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI02", "ASI03"],
+    "compliance": ["HIPAA", "HITECH"],
+    "category": "healthcare"
+  }
+}

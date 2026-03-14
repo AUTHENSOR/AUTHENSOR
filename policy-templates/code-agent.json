@@ -1,0 +1,151 @@
+{
+  "id": "code-agent-safety",
+  "name": "Code Agent Safety Policy",
+  "description": "Controls for agents that write code, execute shell commands, edit files, and install packages. Blocks destructive commands, requires approval for writes and installs. Addresses OWASP ASI01 (goal hijacking) and ASI05 (RCE).",
+  "version": "1.0.0",
+  "defaultEffect": "deny",
+  "rules": [
+    {
+      "id": "allow-file-reads",
+      "effect": "allow",
+      "description": "Allow reading files, searching, and listing directories",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "filesystem.read",
+          "filesystem.list",
+          "filesystem.search",
+          "code.exec.ls",
+          "code.exec.cat",
+          "code.exec.grep",
+          "code.exec.find",
+          "code.exec.head",
+          "code.exec.tail",
+          "code.exec.wc"
+        ]
+      }
+    },
+    {
+      "id": "allow-git-reads",
+      "effect": "allow",
+      "description": "Allow read-only git operations",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "code.exec.git.status",
+          "code.exec.git.log",
+          "code.exec.git.diff",
+          "code.exec.git.branch",
+          "code.exec.git.show"
+        ]
+      }
+    },
+    {
+      "id": "approve-file-writes",
+      "effect": "require_approval",
+      "description": "File writes need human review",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "filesystem\\.write.*"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-git-writes",
+      "effect": "require_approval",
+      "description": "Git commits and pushes need review",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "code.exec.git.commit",
+          "code.exec.git.push",
+          "code.exec.git.merge",
+          "code.exec.git.rebase"
+        ]
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "approve-package-installs",
+      "effect": "require_approval",
+      "description": "Package installs need human review to prevent supply chain attacks",
+      "condition": {
+        "field": "action.type",
+        "operator": "matches",
+        "value": "code\\.exec\\.(npm|pnpm|yarn|pip|cargo|go).*"
+      },
+      "approvalConfig": {
+        "requiredApprovals": 1,
+        "expiresIn": "30m"
+      }
+    },
+    {
+      "id": "deny-destructive",
+      "effect": "deny",
+      "description": "Block destructive system commands",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "code.exec.rm",
+          "code.exec.rmdir",
+          "code.exec.dd",
+          "code.exec.mkfs",
+          "code.exec.chmod",
+          "code.exec.chown",
+          "code.exec.kill",
+          "code.exec.killall",
+          "code.exec.shutdown",
+          "code.exec.reboot"
+        ]
+      }
+    },
+    {
+      "id": "deny-network-exfil",
+      "effect": "deny",
+      "description": "Block commands that could exfiltrate data",
+      "condition": {
+        "field": "action.type",
+        "operator": "in",
+        "value": [
+          "code.exec.curl",
+          "code.exec.wget",
+          "code.exec.nc",
+          "code.exec.netcat",
+          "code.exec.ssh",
+          "code.exec.scp",
+          "code.exec.rsync"
+        ]
+      }
+    },
+    {
+      "id": "rate-limit-execution",
+      "effect": "allow",
+      "description": "Rate limit code execution to prevent runaway loops",
+      "condition": {
+        "field": "action.type",
+        "operator": "startsWith",
+        "value": "code.exec"
+      },
+      "rateLimit": {
+        "requests": 100,
+        "window": "1h",
+        "scope": "principal"
+      }
+    }
+  ],
+  "metadata": {
+    "owasp": ["ASI01", "ASI04", "ASI05", "ASI10"],
+    "category": "code-execution"
+  }
+}

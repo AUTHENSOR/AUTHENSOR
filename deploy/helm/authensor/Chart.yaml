@@ -1,0 +1,27 @@
+apiVersion: v2
+name: authensor
+description: >-
+  Authensor — the open-source safety stack for AI agents.
+  Action authorization, approval workflows, content safety scanning,
+  real-time monitoring, and cryptographic audit trails.
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/authensor/authensor
+sources:
+  - https://github.com/authensor/authensor
+keywords:
+  - ai-safety
+  - agent-safety
+  - guardrails
+  - policy-engine
+  - mcp
+  - audit-trail
+maintainers:
+  - name: Authensor
+    url: https://github.com/authensor
+dependencies:
+  - name: postgresql
+    version: "16.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
