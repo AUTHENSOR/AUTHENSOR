@@ -1,14 +1,16 @@
-# OpenClaw + Authensor Quickstart (Hosted Beta)
+# OpenClaw + Authensor Quickstart
 
 Authensor keeps OpenClaw marketplace skills safe without forcing you to approve every single action.
 
 ## 3-Step Setup (Stupid Simple)
 1. Install the **Authensor Gateway** skill: https://www.clawhub.ai/AUTHENSOR/authensor-gateway
-2. Request a demo key: https://forms.gle/QdfeWAr2G4pc8GxQA (keys are emailed automatically)
-3. Paste the key once, start a new session, and run any marketplace skill. Low‑risk actions run; high‑risk actions ask for approval; known‑dangerous actions are blocked.
+2. Start Authensor locally (`docker compose up -d`) or request a hosted demo key: https://forms.gle/QdfeWAr2G4pc8GxQA
+3. Paste the key once, start a new session, and run any marketplace skill. Low-risk actions run; high-risk actions ask for approval; known-dangerous actions are blocked.
 
-## Add Your Demo Key
+## Add Your Control Plane URL
 Edit `~/.openclaw/openclaw.json` (JSON5) and add:
+
+### Self-hosted (recommended)
 
 ```json5
 {
@@ -17,8 +19,8 @@ Edit `~/.openclaw/openclaw.json` (JSON5) and add:
       "authensor-gateway": {
         enabled: true,
         env: {
-          CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
-          AUTHENSOR_API_KEY: "authensor_demo_..."
+          CONTROL_PLANE_URL: "http://localhost:3000",
+          AUTHENSOR_API_KEY: "authensor_your_key_here"
         }
       }
     }
@@ -35,9 +37,29 @@ If you use sandboxed OpenClaw sessions, also add:
       sandbox: {
         docker: {
           env: {
-            CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
-            AUTHENSOR_API_KEY: "authensor_demo_..."
+            CONTROL_PLANE_URL: "http://localhost:3000",
+            AUTHENSOR_API_KEY: "authensor_your_key_here"
           }
+        }
+      }
+    }
+  }
+}
+```
+
+### Hosted tier (alternative)
+
+If using the managed hosted tier, replace the URL with your hosted endpoint:
+
+```json5
+{
+  skills: {
+    entries: {
+      "authensor-gateway": {
+        enabled: true,
+        env: {
+          CONTROL_PLANE_URL: "https://<your-tenant>.up.railway.app",
+          AUTHENSOR_API_KEY: "authensor_demo_..."
         }
       }
     }

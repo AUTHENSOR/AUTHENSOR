@@ -114,7 +114,7 @@ Save this as `~/.claude/hooks/authensor-gate.sh` and make it executable:
 
 set -euo pipefail
 
-AUTHENSOR_URL="${AUTHENSOR_URL:-https://authensor-api-production.up.railway.app}"
+AUTHENSOR_URL="${AUTHENSOR_URL:-http://localhost:3000}"  # Self-hosted default; set to your hosted URL if using the hosted tier
 AUTHENSOR_TOKEN="${AUTHENSOR_TOKEN:-}"
 
 # Read the hook input from stdin (Claude Code sends JSON)
@@ -239,11 +239,15 @@ for global enforcement):
 ### Step 3: Set your Authensor token
 
 ```bash
-export AUTHENSOR_URL="https://authensor-api-production.up.railway.app"
-export AUTHENSOR_TOKEN="authensor_demo_..."
-```
+# Self-hosted (default):
+export AUTHENSOR_URL="http://localhost:3000"
+export AUTHENSOR_TOKEN="authensor_your_key_here"
 
-Request a demo token at: https://forms.gle/QdfeWAr2G4pc8GxQA
+# Hosted tier:
+# export AUTHENSOR_URL="https://<your-tenant>.up.railway.app"
+# export AUTHENSOR_TOKEN="authensor_demo_..."
+# Request a hosted demo token at: https://forms.gle/QdfeWAr2G4pc8GxQA
+```
 
 ### Hook input/output format
 
@@ -293,7 +297,7 @@ settings:
 # ~/.authensor/cursor-shell.sh
 # Wraps every command through Authensor evaluation
 
-AUTHENSOR_URL="${AUTHENSOR_URL:-https://authensor-api-production.up.railway.app}"
+AUTHENSOR_URL="${AUTHENSOR_URL:-http://localhost:3000}"  # Self-hosted default; set to your hosted URL if using the hosted tier
 AUTHENSOR_TOKEN="${AUTHENSOR_TOKEN:-}"
 
 # If run interactively, just exec bash
@@ -348,13 +352,15 @@ but adds a layer of friction:
 Before executing any file write, shell command, or network request, call the
 Authensor evaluate endpoint to check if the action is permitted:
 
-  POST https://authensor-api-production.up.railway.app/evaluate
+  POST http://localhost:3000/evaluate
   Authorization: Bearer $AUTHENSOR_TOKEN
   Body: { "action": { "type": "<action_type>", "resource": "<resource>" },
           "principal": { "type": "agent", "id": "cursor" } }
 
 If the response outcome is "deny" or "require_approval", do not execute the action.
 Inform the user of the decision and the receipt URL.
+
+(If using the hosted tier, replace http://localhost:3000 with your hosted URL.)
 ```
 
 > Note: Option C is not a security boundary -- it relies on the model following
@@ -570,7 +576,11 @@ record of what was attempted, what the policy decided, and whether it was approv
 Open the receipts dashboard in your browser:
 
 ```
-https://authensor-api-production.up.railway.app/receipts/view
+# Self-hosted (default):
+http://localhost:3000/receipts/view
+
+# Hosted tier:
+# https://<your-tenant>.up.railway.app/receipts/view
 ```
 
 You will need your admin token as a query parameter or `Authorization` header.

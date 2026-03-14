@@ -1,5 +1,21 @@
+# Authensor Self-Hosted Stack
+#
+# Everything runs locally. No external services required.
+#
+# Usage:
+#   docker compose up -d          # Start Postgres + Control Plane + MCP Server
+#   docker compose up -d postgres control-plane   # Start without MCP Server
+#   docker compose logs -f        # Tail logs
+#   docker compose down           # Stop everything
+#
+# The control plane will be available at http://localhost:3000
+# Set AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN in .env to auto-create an admin key on first run.
+#
+# See .env.example for all available environment variables.
+
 services:
-  # PostgreSQL for receipts and policy storage
+  # PostgreSQL — stores receipts, policies, API keys, and execution controls.
+  # Data is persisted in a Docker volume (postgres_data).
   postgres:
     image: postgres:16-alpine
     container_name: authensor-postgres
@@ -17,7 +33,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # Control Plane API (built from local source)
+  # Control Plane API — the core Authensor service. Evaluates action envelopes
+  # against policies, manages receipts and approvals, and enforces rate limits.
+  # Built from local source (packages/control-plane).
   control-plane:
     build:
       context: .
@@ -29,12 +47,12 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgres://authensor:authensor_dev@postgres:5432/authensor
       PORT: 3000
-      # Bootstrap: set this on first run to auto-create an admin API key
-      # The key will be printed to stdout on startup
+      # Bootstrap: set this on first run to auto-create an admin API key.
+      # The key will be printed to stdout on startup.
       AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN: ${AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN:-}
-      # Safety defaults: fail-closed without a policy
+      # Safety defaults: fail-closed without a policy (deny all if no policy loaded).
       AUTHENSOR_ALLOW_FALLBACK_POLICY: ${AUTHENSOR_ALLOW_FALLBACK_POLICY:-false}
-      # Sandbox mode for safe testing (stub = no real API calls)
+      # Sandbox mode for safe testing (stub = no real API calls, real = live execution).
       AUTHENSOR_SANDBOX_MODE: ${AUTHENSOR_SANDBOX_MODE:-real}
     depends_on:
       postgres:
@@ -50,7 +68,9 @@ services:
       - ./packages/engine/src:/app/packages/engine/src
       - ./packages/schemas/src:/app/packages/schemas/src
 
-  # MCP Server (for local testing)
+  # MCP Server — exposes Authensor-governed MCP tools (Stripe, GitHub, HTTP).
+  # Connects to the control plane over the internal Docker network.
+  # Optional: only needed if you want MCP tool governance.
   mcp-server:
     build:
       context: .
@@ -60,8 +80,9 @@ services:
       - "3001:3001"
     environment:
       NODE_ENV: development
+      # Internal Docker network URL for the control plane (not exposed externally).
       CONTROL_PLANE_URL: http://control-plane:3000
-      # Integration credentials (from .env)
+      # Integration credentials (from .env file — never committed to version control).
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     depends_on:
