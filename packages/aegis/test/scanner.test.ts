@@ -221,7 +221,7 @@ describe('Credential Detector', () => {
   });
 
   it('detects Stripe keys', () => {
-    const result = scanner.scan('STRIPE_KEY=sk_test_ExAmPlEkEyFoRtEsTiNgOnLy');
+    const result = scanner.scan('STRIPE_KEY=sk_test_AbCdEfGhIjKlMnOpQrSt');
     const stripe = result.detections.find(d => d.subType === 'STRIPE_KEY');
     expect(stripe).toBeDefined();
   });
