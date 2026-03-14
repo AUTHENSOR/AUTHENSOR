@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
@@ -38,5 +38,14 @@
     "agent",
     "guardrails"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/sdk-ts"
+  },
+  "homepage": "https://github.com/authensor/authensor",
+  "publishConfig": {
+    "access": "public"
+  }
 }

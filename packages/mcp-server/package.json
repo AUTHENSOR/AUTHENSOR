@@ -32,6 +32,15 @@
     "typescript": "^5.3.0",
     "vitest": "^1.1.0"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "keywords": [
     "authensor",
     "mcp",
@@ -39,5 +48,14 @@
     "stripe",
     "github"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/authensor/authensor",
+  "publishConfig": {
+    "access": "public"
+  }
 }
