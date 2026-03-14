@@ -13,12 +13,29 @@
  *   npx authensor status       — Check running services
  *   npx authensor templates    — List policy templates
  *   npx authensor apply <id>   — Apply a policy template
+ *   npx authensor policy lint <file>        — Validate a policy file
+ *   npx authensor policy test <file>        — Run policy test cases
+ *   npx authensor policy diff <a> <b>       — Compare two policies
  */
 
 import { execSync, spawn } from 'child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { createInterface } from 'readline';
+
+import {
+  lintPolicy,
+  loadPolicyFile,
+  formatDiagnostics,
+  loadTestFile,
+  resolvePolicy,
+  runTestSuite,
+  formatTestResults,
+  diffPolicies,
+  loadPolicyFromFile,
+  loadPolicyFromControlPlane,
+  formatDiffResult,
+} from './policy/index.js';
 
 const VERSION = '0.0.1';
 
@@ -479,6 +496,375 @@ function generateToken(): string {
   return result;
 }
 
+// ── Aegis Commands ───────────────────────────────────────────────────
+
+async function cmdAegisScan(text?: string) {
+  const controlPlaneUrl = process.env.CONTROL_PLANE_URL || process.env.AUTHENSOR_URL || 'http://localhost:3000';
+  const apiKey = process.env.AUTHENSOR_API_KEY || process.env.AUTHENSOR_ADMIN_KEY;
+
+  // Read from stdin if no text argument
+  if (!text) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk);
+    }
+    text = Buffer.concat(chunks).toString('utf-8').trim();
+  }
+
+  if (!text) {
+    console.log(red('\n  Usage: npx authensor aegis scan "text to scan"'));
+    console.log(dim('  Or pipe: echo "text" | npx authensor aegis scan\n'));
+    process.exit(1);
+  }
+
+  // Try local scanner first (no control plane needed)
+  try {
+    // @ts-ignore — @authensor/aegis is an optional dependency
+    const aegis = await import('@authensor/aegis');
+    const scanner = new aegis.AegisScanner();
+    const result = scanner.scan(text, { mode: 'redact' });
+
+    console.log(bold('\n  Authensor Aegis — Content Scan\n'));
+    console.log(dim(`  Input: "${text.length > 60 ? text.slice(0, 57) + '...' : text}"\n`));
+
+    if (result.safe) {
+      console.log(green('  No threats detected.\n'));
+      return;
+    }
+
+    console.log(bold('  Detections:\n'));
+    for (const d of result.detections) {
+      const icon = d.type === 'injection' || d.type === 'exfiltration' ? red('!!') : yellow('!!');
+      console.log(`  ${icon} ${bold(d.type.toUpperCase())}:${d.subType.padEnd(12)} ${dim(`"${d.content}"`)}`);
+      console.log(`     ${dim(`confidence: ${d.confidence}  pattern: ${d.pattern}`)}`);
+      if (d.line) console.log(`     ${dim(`line: ${d.line}`)}`);
+      console.log('');
+    }
+
+    const levelColors: Record<string, (s: string) => string> = {
+      critical: red, high: red, medium: yellow, low: dim,
+    };
+    const colorFn = levelColors[result.threatLevel] || dim;
+    console.log(`  Threat Level: ${colorFn(result.threatLevel.toUpperCase())}`);
+    console.log(`  Scan time:    ${dim(`${result.scanTimeMs}ms`)}`);
+
+    if (result.redacted) {
+      console.log(`\n  Redacted: ${dim(result.redacted)}`);
+    }
+    console.log('');
+    return;
+  } catch {
+    // Fall through to control plane API
+  }
+
+  // Try control plane API
+  if (!apiKey) {
+    console.log(red('\n  @authensor/aegis not installed locally and no AUTHENSOR_API_KEY set.'));
+    console.log(dim('  Install: npm install @authensor/aegis'));
+    console.log(dim('  Or set AUTHENSOR_API_KEY for remote scanning.\n'));
+    process.exit(1);
+  }
+
+  try {
+    const res = await fetch(`${controlPlaneUrl}/aegis/scan`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content: text, mode: 'redact' }),
+    });
+
+    const data = await res.json() as any;
+    if (!res.ok) {
+      console.log(red(`\n  Error: ${data.message || data.error}\n`));
+      process.exit(1);
+    }
+
+    console.log(bold('\n  Authensor Aegis — Remote Scan\n'));
+    console.log(`  Safe: ${data.safe ? green('yes') : red('no')}`);
+    console.log(`  Threat level: ${data.threatLevel}`);
+    console.log(`  Detections: ${data.detections?.length || 0}`);
+    if (data.redacted) console.log(`  Redacted: ${dim(data.redacted)}`);
+    console.log('');
+  } catch {
+    console.log(red(`\n  Could not reach control plane at ${controlPlaneUrl}\n`));
+    process.exit(1);
+  }
+}
+
+async function cmdAegisStatus() {
+  // Try local scanner
+  try {
+    // @ts-ignore — @authensor/aegis is an optional dependency
+    const aegis = await import('@authensor/aegis');
+    const scanner = new aegis.AegisScanner();
+    const rulesByType = scanner.getRulesByDetector();
+    const totalRules = scanner.getRuleCount();
+
+    console.log(bold('\n  Authensor Aegis Status\n'));
+    console.log(`  Scanner:    ${green('available')} (local)`);
+    console.log(`  Rules:      ${totalRules} total`);
+    console.log('');
+    for (const [type, count] of Object.entries(rulesByType)) {
+      console.log(`    ${type.padEnd(16)} ${count} rules`);
+    }
+    console.log('');
+    return;
+  } catch {
+    console.log(yellow('\n  @authensor/aegis not installed locally.'));
+    console.log(dim('  Install: npm install @authensor/aegis\n'));
+  }
+}
+
+// ── Sentinel Commands ────────────────────────────────────────────────
+
+async function cmdSentinelStatus() {
+  const controlPlaneUrl = process.env.CONTROL_PLANE_URL || process.env.AUTHENSOR_URL || 'http://localhost:3000';
+  const apiKey = process.env.AUTHENSOR_API_KEY || process.env.AUTHENSOR_ADMIN_KEY;
+
+  if (!apiKey) {
+    console.log(red('\n  AUTHENSOR_API_KEY required for Sentinel commands.\n'));
+    process.exit(1);
+  }
+
+  try {
+    const res = await fetch(`${controlPlaneUrl}/sentinel/status`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json() as any;
+
+    console.log(bold('\n  Authensor Sentinel Status\n'));
+    console.log(`  Enabled:       ${data.enabled ? green('yes') : red('no')}`);
+    console.log(`  Total events:  ${data.totalEvents || 0}`);
+    console.log(`  Active agents: ${data.activeAgents || 0}`);
+    console.log(`  Active alerts: ${data.activeAlerts || 0}`);
+    console.log(`  Uptime:        ${dim(formatMs(data.uptimeMs || 0))}`);
+    console.log('');
+  } catch {
+    console.log(red(`\n  Could not reach control plane at ${controlPlaneUrl}\n`));
+    process.exit(1);
+  }
+}
+
+async function cmdSentinelAlerts() {
+  const controlPlaneUrl = process.env.CONTROL_PLANE_URL || process.env.AUTHENSOR_URL || 'http://localhost:3000';
+  const apiKey = process.env.AUTHENSOR_API_KEY || process.env.AUTHENSOR_ADMIN_KEY;
+
+  if (!apiKey) {
+    console.log(red('\n  AUTHENSOR_API_KEY required for Sentinel commands.\n'));
+    process.exit(1);
+  }
+
+  try {
+    const res = await fetch(`${controlPlaneUrl}/sentinel/alerts`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json() as any;
+
+    console.log(bold('\n  Authensor Sentinel — Alerts\n'));
+    if (!data.alerts?.length) {
+      console.log(green('  No active alerts.\n'));
+      return;
+    }
+
+    for (const a of data.alerts) {
+      const sevColor = a.severity === 'critical' ? red : a.severity === 'warning' ? yellow : dim;
+      console.log(`  ${sevColor(a.severity.toUpperCase().padEnd(9))} ${bold(a.ruleName)}`);
+      console.log(`  ${dim(`  ${a.message}`)}`);
+      console.log(`  ${dim(`  Agent: ${a.agentId || 'global'}  Status: ${a.status}  Triggered: ${a.triggeredAt}`)}`);
+      console.log('');
+    }
+  } catch {
+    console.log(red(`\n  Could not reach control plane at ${controlPlaneUrl}\n`));
+    process.exit(1);
+  }
+}
+
+async function cmdSentinelAgents() {
+  const controlPlaneUrl = process.env.CONTROL_PLANE_URL || process.env.AUTHENSOR_URL || 'http://localhost:3000';
+  const apiKey = process.env.AUTHENSOR_API_KEY || process.env.AUTHENSOR_ADMIN_KEY;
+
+  if (!apiKey) {
+    console.log(red('\n  AUTHENSOR_API_KEY required for Sentinel commands.\n'));
+    process.exit(1);
+  }
+
+  try {
+    const res = await fetch(`${controlPlaneUrl}/sentinel/agents`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json() as any;
+
+    console.log(bold('\n  Authensor Sentinel — Agent Stats\n'));
+    if (!data.agents?.length) {
+      console.log(dim('  No agents tracked yet.\n'));
+      return;
+    }
+
+    for (const a of data.agents) {
+      const riskColor = a.riskScore >= 80 ? green : a.riskScore >= 50 ? yellow : red;
+      console.log(`  ${bold(a.agentId.padEnd(20))} ${riskColor(`${a.riskScore}/100`)}`);
+      console.log(`    Actions: ${a.totalActions}  Allow: ${a.allowCount}  Deny: ${a.denyCount}  Cost: $${a.totalCost}`);
+      console.log(`    Deny rate: ${(a.denyRate * 100).toFixed(1)}%  Avg latency: ${a.avgLatencyMs}ms`);
+      console.log('');
+    }
+  } catch {
+    console.log(red(`\n  Could not reach control plane at ${controlPlaneUrl}\n`));
+    process.exit(1);
+  }
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(0)}s`;
+  if (ms < 3600_000) return `${(ms / 60_000).toFixed(0)}m`;
+  return `${(ms / 3600_000).toFixed(1)}h`;
+}
+
+// ── Policy Commands ──────────────────────────────────────────────────
+
+async function cmdPolicyLint(filePath?: string) {
+  if (!filePath) {
+    console.log(red('\n  Usage: npx authensor policy lint <policy-file>'));
+    console.log(dim('  Example: npx authensor policy lint policy.json\n'));
+    process.exit(1);
+  }
+
+  const resolvedPath = resolve(filePath);
+
+  if (!existsSync(resolvedPath)) {
+    console.log(red(`\n  File not found: ${resolvedPath}\n`));
+    process.exit(1);
+  }
+
+  console.log(bold('\n  Authensor Policy Lint\n'));
+
+  try {
+    const policy = loadPolicyFile(resolvedPath);
+    const result = lintPolicy(policy);
+    console.log(formatDiagnostics(result, filePath));
+    console.log('');
+    process.exit(result.valid ? 0 : 1);
+  } catch (err) {
+    console.log(red(`  Failed to parse ${filePath}: ${err instanceof Error ? err.message : String(err)}\n`));
+    process.exit(1);
+  }
+}
+
+async function cmdPolicyTest(testFilePath?: string) {
+  if (!testFilePath) {
+    console.log(red('\n  Usage: npx authensor policy test <test-file>'));
+    console.log(dim('  Example: npx authensor policy test policy-tests.json\n'));
+    console.log(dim('  Test file format:'));
+    console.log(dim('  {'));
+    console.log(dim('    "policy": "./policy.json",'));
+    console.log(dim('    "tests": ['));
+    console.log(dim('      {'));
+    console.log(dim('        "name": "should deny unauthorized requests",'));
+    console.log(dim('        "envelope": { ... },'));
+    console.log(dim('        "expected": { "outcome": "deny" }'));
+    console.log(dim('      }'));
+    console.log(dim('    ]'));
+    console.log(dim('  }\n'));
+    process.exit(1);
+  }
+
+  const resolvedPath = resolve(testFilePath);
+
+  if (!existsSync(resolvedPath)) {
+    console.log(red(`\n  File not found: ${resolvedPath}\n`));
+    process.exit(1);
+  }
+
+  console.log(bold('\n  Authensor Policy Test\n'));
+
+  try {
+    // Load test file
+    const testFile = loadTestFile(resolvedPath);
+    const policy = resolvePolicy(testFile, resolvedPath);
+
+    // Load engine dynamically
+    let engine: { evaluate: (...args: any[]) => any };
+    try {
+      const engineModule = await import('@authensor/engine');
+      const policyEngine = new engineModule.PolicyEngine();
+      engine = {
+        evaluate: (envelope: any, policies: any[]) => policyEngine.evaluate(envelope, policies),
+      };
+    } catch {
+      console.log(red('  @authensor/engine is not available.'));
+      console.log(dim('  Install it: pnpm add @authensor/engine'));
+      console.log(dim('  Or run from the Authensor monorepo.\n'));
+      process.exit(1);
+    }
+
+    const result = runTestSuite(testFile.tests, policy, engine);
+    console.log(formatTestResults(result));
+    console.log('');
+    process.exit(result.failed === 0 ? 0 : 1);
+  } catch (err) {
+    console.log(red(`  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+    process.exit(1);
+  }
+}
+
+async function cmdPolicyDiff(fileA?: string, fileB?: string) {
+  if (!fileA) {
+    console.log(red('\n  Usage: npx authensor policy diff <policy-a> <policy-b>'));
+    console.log(dim('  Example: npx authensor policy diff old-policy.json new-policy.json'));
+    console.log(dim('  Or:      npx authensor policy diff policy.json --active\n'));
+    process.exit(1);
+  }
+
+  const resolvedA = resolve(fileA);
+  if (!existsSync(resolvedA)) {
+    console.log(red(`\n  File not found: ${resolvedA}\n`));
+    process.exit(1);
+  }
+
+  console.log(bold('\n  Authensor Policy Diff\n'));
+
+  try {
+    const policyA = loadPolicyFromFile(resolvedA);
+    let policyB: Record<string, unknown>;
+    let labelB: string;
+
+    if (fileB === '--active' || fileB === '--remote') {
+      // Fetch the active policy from the control plane
+      const controlPlaneUrl = process.env.CONTROL_PLANE_URL || process.env.AUTHENSOR_URL || 'http://localhost:3000';
+      const apiKey = process.env.AUTHENSOR_API_KEY || process.env.AUTHENSOR_ADMIN_KEY;
+
+      if (!apiKey) {
+        console.log(red('  AUTHENSOR_API_KEY required to fetch active policy.\n'));
+        process.exit(1);
+      }
+
+      policyB = await loadPolicyFromControlPlane(controlPlaneUrl, apiKey);
+      labelB = 'active (control plane)';
+    } else if (fileB) {
+      const resolvedB = resolve(fileB);
+      if (!existsSync(resolvedB)) {
+        console.log(red(`  File not found: ${resolvedB}\n`));
+        process.exit(1);
+      }
+      policyB = loadPolicyFromFile(resolvedB);
+      labelB = fileB;
+    } else {
+      console.log(red('  Please provide a second policy file or --active to compare with the control plane.\n'));
+      process.exit(1);
+    }
+
+    const result = diffPolicies(policyA, policyB);
+    console.log(formatDiffResult(result, fileA, labelB));
+    console.log('');
+    process.exit(result.summary.breaking > 0 ? 1 : 0);
+  } catch (err) {
+    console.log(red(`  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+    process.exit(1);
+  }
+}
+
 function printHelp() {
   console.log(`
   ${bold('authensor')} v${VERSION} — The open-source safety stack for AI agents
@@ -490,6 +876,22 @@ function printHelp() {
     npx authensor status       Check running services
     npx authensor templates    List available policy templates
     npx authensor apply <id>   Apply a policy template
+
+  ${bold('Policy tools:')}
+    npx authensor policy lint <file>         Validate a policy file
+    npx authensor policy test <test-file>    Run policy test cases
+    npx authensor policy diff <a> <b>        Compare two policy versions
+    npx authensor policy diff <a> --active   Compare with active policy
+
+  ${bold('Aegis (content safety):')}
+    npx authensor aegis scan "text"   Scan text for threats
+    npx authensor aegis status        Scanner status and rule counts
+    echo "text" | npx authensor aegis scan   Pipe content to scan
+
+  ${bold('Sentinel (monitoring):')}
+    npx authensor sentinel status     Monitoring status
+    npx authensor sentinel alerts     View active alerts
+    npx authensor sentinel agents     Per-agent behavioral stats
 
   ${bold('Environment:')}
     CONTROL_PLANE_URL          Control plane URL (default: http://localhost:3000)
@@ -525,6 +927,63 @@ switch (command) {
   case 'apply':
     cmdApply(args[1]);
     break;
+  case 'policy': {
+    const sub = args[1];
+    switch (sub) {
+      case 'lint':
+        cmdPolicyLint(args[2]);
+        break;
+      case 'test':
+        cmdPolicyTest(args[2]);
+        break;
+      case 'diff':
+        cmdPolicyDiff(args[2], args[3]);
+        break;
+      default:
+        console.log(bold('\n  Policy — Policy management tools\n'));
+        console.log(`  ${cyan('policy lint <file>')}          Validate a policy file against the schema`);
+        console.log(`  ${cyan('policy test <test-file>')}     Run policy test cases`);
+        console.log(`  ${cyan('policy diff <a> <b>')}         Compare two policy versions`);
+        console.log(`  ${cyan('policy diff <a> --active')}    Compare with active control plane policy\n`);
+    }
+    break;
+  }
+  case 'aegis': {
+    const sub = args[1];
+    switch (sub) {
+      case 'scan':
+        cmdAegisScan(args.slice(2).join(' ') || undefined);
+        break;
+      case 'status':
+        cmdAegisStatus();
+        break;
+      default:
+        console.log(bold('\n  Aegis — Content safety for AI agents\n'));
+        console.log(`  ${cyan('aegis scan "text"')}   Scan text for threats`);
+        console.log(`  ${cyan('aegis status')}        Scanner status\n`);
+    }
+    break;
+  }
+  case 'sentinel': {
+    const sub = args[1];
+    switch (sub) {
+      case 'status':
+        cmdSentinelStatus();
+        break;
+      case 'alerts':
+        cmdSentinelAlerts();
+        break;
+      case 'agents':
+        cmdSentinelAgents();
+        break;
+      default:
+        console.log(bold('\n  Sentinel — Monitoring for AI agents\n'));
+        console.log(`  ${cyan('sentinel status')}    Monitoring status`);
+        console.log(`  ${cyan('sentinel alerts')}    View active alerts`);
+        console.log(`  ${cyan('sentinel agents')}    Per-agent stats\n`);
+    }
+    break;
+  }
   case '--help':
   case '-h':
   case 'help':

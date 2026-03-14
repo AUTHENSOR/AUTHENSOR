@@ -1,0 +1,44 @@
+{
+  "name": "create-authensor",
+  "version": "0.0.1",
+  "description": "Scaffold an AI agent project with Authensor safety built in — npx create-authensor",
+  "type": "module",
+  "bin": {
+    "create-authensor": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "files": ["dist"],
+  "keywords": [
+    "create",
+    "authensor",
+    "scaffolder",
+    "ai-safety",
+    "agent-safety",
+    "guardrails",
+    "agent-authorization",
+    "starter",
+    "boilerplate",
+    "agentic-ai"
+  ],
+  "author": {
+    "name": "John Kearney",
+    "url": "https://github.com/jkearney"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/create-authensor"
+  },
+  "homepage": "https://authensor.com",
+  "publishConfig": { "access": "public" }
+}
