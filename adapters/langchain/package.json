@@ -1,0 +1,17 @@
+{
+  "name": "@authensor/langchain",
+  "version": "0.0.1",
+  "description": "Authensor guardrail adapter for LangChain/LangGraph",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "keywords": ["authensor", "langchain", "langgraph", "guardrail", "ai-safety"]
+}
