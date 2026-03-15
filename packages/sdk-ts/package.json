@@ -36,8 +36,17 @@
   "keywords": [
     "authensor",
     "sdk",
-    "agent",
-    "guardrails"
+    "ai-safety",
+    "agent-safety",
+    "guardrails",
+    "policy-engine",
+    "ai-agent",
+    "agentic-ai",
+    "security",
+    "open-source",
+    "authorization",
+    "agent-sdk",
+    "typescript"
   ],
   "license": "MIT",
   "repository": {
