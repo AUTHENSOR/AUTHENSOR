@@ -1,0 +1,25 @@
+{
+  "name": "@authensor/example-langchain",
+  "version": "0.0.1",
+  "private": true,
+  "description": "LangChain agent with Authensor safety guardrails",
+  "type": "module",
+  "scripts": {
+    "demo": "tsx src/demo.ts",
+    "demo:unsafe": "tsx src/demo-unsafe.ts",
+    "start": "tsx src/agent.ts"
+  },
+  "dependencies": {
+    "@authensor/engine": "workspace:*",
+    "@authensor/aegis": "workspace:*",
+    "@authensor/langchain": "workspace:*",
+    "langchain": "^0.3.0",
+    "@langchain/core": "^0.3.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

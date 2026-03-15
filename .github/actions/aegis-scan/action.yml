@@ -1,0 +1,35 @@
+name: 'Authensor Aegis Scan'
+description: 'Scan agent code and prompts for prompt injection, PII, credentials, and memory poisoning'
+branding:
+  icon: 'shield'
+  color: 'red'
+inputs:
+  path:
+    description: 'Path to scan (file or directory)'
+    required: false
+    default: '.'
+  fail-on-detection:
+    description: 'Fail the workflow if threats are detected'
+    required: false
+    default: 'true'
+  config:
+    description: 'Path to Aegis config file'
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Install Aegis
+      shell: bash
+      run: npm install -g @authensor/aegis @authensor/cli
+    - name: Run Aegis Scan
+      shell: bash
+      run: |
+        echo "🛡️ Authensor Aegis — Scanning for agent safety threats"
+        echo "Path: ${{ inputs.path }}"
+        npx authensor scan ${{ inputs.path }} --format github-actions
+      env:
+        AEGIS_FAIL_ON_DETECTION: ${{ inputs.fail-on-detection }}
