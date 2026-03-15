@@ -18,6 +18,7 @@ import {
   endEvaluationSpan,
   buildEvalAttributes,
 } from '../services/telemetry-service.js';
+import { incrementCounter } from '../services/stats-service.js';
 
 export const evaluateRoute = new Hono();
 
@@ -163,6 +164,11 @@ evaluateRoute.post(
         envelope,
       });
 
+      // Fire-and-forget: increment stats counters (no-policy deny)
+      incrementCounter('actions_evaluated').catch(() => {});
+      incrementCounter('receipts_created').catch(() => {});
+      incrementCounter('threats_detected').catch(() => {});
+
       await maybeSendPolicyMissingAlert({
         orgId,
         environment,
@@ -303,6 +309,16 @@ evaluateRoute.post(
 
     const receiptViewPath = `/receipts/${receipt.id}/view`;
     const receiptApiPath = `/receipts/${receipt.id}`;
+
+    // Fire-and-forget: increment anonymous stats counters
+    incrementCounter('actions_evaluated').catch(() => {});
+    incrementCounter('receipts_created').catch(() => {});
+    if (result.decision.outcome === 'deny') {
+      incrementCounter('threats_detected').catch(() => {});
+    }
+    if (result.decision.outcome === 'require_approval') {
+      incrementCounter('approvals_requested').catch(() => {});
+    }
 
     return c.json({
       receiptId: receipt.id,
