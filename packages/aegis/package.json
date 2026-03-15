@@ -42,8 +42,12 @@
     "ai-safety",
     "agent-safety",
     "guardrails",
-    "content-moderation",
+    "policy-engine",
+    "ai-agent",
     "agentic-ai",
+    "security",
+    "open-source",
+    "content-moderation",
     "security-scanner",
     "owasp",
     "llm-security"
