@@ -1,0 +1,68 @@
+# Authensor Policy for OpenAI Agents SDK
+# This policy controls which tool calls an AI agent can execute.
+
+id: openai-agent-policy
+name: OpenAI Agent Safety Policy
+description: Controls tool access for OpenAI-powered agents
+version: "1.0.0"
+priority: 100
+
+scope:
+  principalTypes:
+    - agent
+  actionTypes:
+    - "agent.**"
+
+rules:
+  # Safe read-only operations — always allowed
+  - id: allow-search
+    name: Allow web search
+    description: Web searches are read-only and safe
+    effect: allow
+    condition:
+      field: action.type
+      operator: eq
+      value: agent.search_web
+
+  # Messaging requires human review
+  - id: review-messaging
+    name: Review outbound messages
+    description: Messages to external services need human approval
+    effect: require_approval
+    condition:
+      field: action.type
+      operator: eq
+      value: agent.send_slack_message
+
+  # File writes require review
+  - id: review-file-write
+    name: Review file writes
+    description: File system writes need human approval
+    effect: require_approval
+    condition:
+      field: action.type
+      operator: eq
+      value: agent.write_file
+
+  # Destructive database operations — always denied
+  - id: deny-db-delete
+    name: Block database deletion
+    description: Agents must never delete databases
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: agent.delete_database
+
+  # Shell commands — always denied
+  - id: deny-shell
+    name: Block shell commands
+    description: Agents must never execute arbitrary shell commands
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: agent.run_shell_command
+
+# If no rule matches, deny (fail-closed)
+defaultEffect: deny

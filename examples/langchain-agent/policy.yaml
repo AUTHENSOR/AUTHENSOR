@@ -1,0 +1,111 @@
+# Authensor Policy for LangChain Agent
+#
+# This policy demonstrates fine-grained control over agent tool usage.
+# Rules are evaluated top-to-bottom; first match wins.
+
+id: langchain-agent-policy
+name: LangChain Agent Safety Policy
+description: >
+  Controls which tools a LangChain agent can invoke, with rules for
+  file access, email, and command execution. Designed to show how
+  Authensor protects against unsafe agent actions.
+version: "1.0.0"
+priority: 100
+enabled: true
+
+scope:
+  actionTypes:
+    - "langchain.*"
+  principalTypes:
+    - agent
+
+rules:
+  # ── File reads are generally safe ──────────────────────────────────
+  - id: allow-file-read
+    name: Allow file reads
+    description: Reading files is permitted for all paths
+    effect: allow
+    condition:
+      field: action.type
+      operator: eq
+      value: langchain.read_file
+
+  # ── Block writes to sensitive paths ────────────────────────────────
+  - id: deny-sensitive-write
+    name: Deny writes to sensitive paths
+    description: Block file writes to system directories and config files
+    effect: deny
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: langchain.write_file
+        - any:
+            - field: action.parameters.path
+              operator: startsWith
+              value: /etc/
+            - field: action.parameters.path
+              operator: startsWith
+              value: /System/
+            - field: action.parameters.path
+              operator: contains
+              value: .env
+            - field: action.parameters.path
+              operator: contains
+              value: .ssh
+            - field: action.parameters.path
+              operator: contains
+              value: credentials
+
+  # ── Allow writes to safe directories ───────────────────────────────
+  - id: allow-safe-write
+    name: Allow writes to safe directories
+    description: Permit file writes to the project output directory
+    effect: allow
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: langchain.write_file
+        - field: action.parameters.path
+          operator: startsWith
+          value: ./output/
+
+  # ── Block all file deletions ───────────────────────────────────────
+  - id: deny-delete
+    name: Block file deletion
+    description: Agents should not delete files without human oversight
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: langchain.delete_file
+
+  # ── Email requires human approval ─────────────────────────────────
+  - id: approve-email
+    name: Require approval for email
+    description: All outbound emails must be reviewed by a human before sending
+    effect: require_approval
+    condition:
+      field: action.type
+      operator: eq
+      value: langchain.send_email
+    approvalConfig:
+      approvers:
+        - type: user
+          id: security-team
+      expiresIn: "1h"
+      requiredApprovals: 1
+
+  # ── Block all command execution ────────────────────────────────────
+  - id: deny-command
+    name: Block command execution
+    description: Shell command execution is never permitted for agents
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: langchain.execute_command
+
+# Fail-closed: if no rule matches, deny the action
+defaultEffect: deny

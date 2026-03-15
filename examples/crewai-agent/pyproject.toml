@@ -1,0 +1,19 @@
+[project]
+name = "authensor-crewai-example"
+version = "0.1.0"
+description = "CrewAI + Authensor safety guardrails example"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+crewai = [
+    "crewai>=0.30.0",
+]
+
+[project.scripts]
+demo = "demo:main"
+demo-unsafe = "demo_unsafe:main"
