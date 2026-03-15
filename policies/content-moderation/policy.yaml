@@ -1,0 +1,445 @@
+# ============================================================
+# Authensor Policy Template: Content Moderation
+# ============================================================
+# Policy for AI agents that review and moderate user-generated
+# content. The design principle is: the agent can identify and
+# flag content, but irreversible or high-impact actions (bans,
+# deletions, removals) always require human oversight.
+#
+# Moderation agents have significant power over user accounts
+# and platform content. Errors — especially false positives —
+# can cause serious harm to users. This policy enforces a
+# human-in-the-loop checkpoint for all consequential actions.
+#
+# Action taxonomy assumed:
+#   - content.review.*     — reading/inspecting content
+#   - content.flag.*       — flagging for human review
+#   - content.remove.*     — removing/hiding content
+#   - content.delete.*     — permanent deletion
+#   - queue.*              — moderation queue management
+#   - user.ban.*           — banning users
+#   - user.warn.*          — issuing user warnings
+#   - user.mute.*          — muting/restricting users
+
+id: content-moderation-v1
+name: "Content Moderation Agent"
+version: "1.0.0"
+description: >
+  Policy for content moderation agents. Blocks permanent bans
+  without approval and content deletion without logging. Requires
+  approval for temporary bans, content removal, and user warnings.
+  Allows content review, flagging, and queue management freely.
+
+enabled: true
+priority: 75
+
+scope:
+  principalTypes:
+    - agent
+    - service
+  environments:
+    - production
+    - staging
+
+rules:
+
+  # ── Rule 1: Hard block — permanent bans without approval ──────────
+  # A permanent ban is irreversible and high-impact. No agent
+  # should be able to permanently ban a user without a human
+  # moderator reviewing the decision.
+  - id: deny-permanent-bans
+    name: "Block permanent user bans"
+    description: >
+      Deny permanent ban actions. Permanent bans are irreversible
+      and must be reviewed and approved by a human moderation
+      team lead before execution. Use temporary ban (require_approval)
+      as the agent's escalation path.
+    effect: deny
+    condition:
+      any:
+        - all:
+            - field: action.type
+              operator: contains
+              value: "ban"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "permanent"
+                - field: action.parameters.duration
+                  operator: eq
+                  value: "permanent"
+                - field: action.parameters.permanent
+                  operator: eq
+                  value: true
+        - field: action.type
+          operator: matches
+          value: "^user\\.ban\\.permanent$"
+        - field: action.type
+          operator: matches
+          value: "^user\\.account\\.terminate$"
+
+  # ── Rule 2: Hard block — content deletion without audit log ───────
+  # Content must never be permanently deleted without a log entry
+  # that records what was deleted, why, and by whom. The presence
+  # of context.auditLogged = true is required for deletion.
+  - id: deny-deletion-without-audit
+    name: "Block content deletion when audit log flag is absent"
+    description: >
+      Deny permanent content deletion unless the envelope carries
+      context.auditLogged = true. This enforces the audit trail
+      requirement: all deletions must be logged in the content
+      moderation audit system before the deletion is executed.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "content.delete"
+            - field: action.type
+              operator: matches
+              value: "^.*\\.delete\\.permanent$"
+        - not:
+            field: context.auditLogged
+            operator: eq
+            value: true
+
+  # ── Rule 3: Hard block — mass actions without approval ────────────
+  # Bulk operations (mass content removal, mass bans) have an
+  # outsized impact. Any action targeting more than one item
+  # at a time must go through approval.
+  - id: deny-bulk-actions-without-approval
+    name: "Block bulk moderation actions"
+    description: >
+      Deny bulk actions that target more than one user or content
+      item simultaneously. Bulk operations require a senior
+      moderator to review the scope and impact.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "bulk"
+            - field: action.type
+              operator: contains
+              value: "mass"
+            - field: action.parameters.targetCount
+              operator: gt
+              value: 1
+
+  # ── Rule 4: Require approval — temporary bans ─────────────────────
+  - id: require-approval-temporary-bans
+    name: "Require approval for temporary user bans"
+    description: >
+      Temporary bans are high-impact but reversible. The agent
+      may propose a ban but a human moderator must confirm it
+      before execution. Approval expires in 1 hour.
+    effect: require_approval
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "user.ban"
+            - field: action.type
+              operator: matches
+              value: "^user\\.ban\\.temporary$"
+            - field: action.type
+              operator: matches
+              value: "^user\\.suspend$"
+        # Distinguish temporary from permanent (permanent caught by rule 1)
+        - not:
+            any:
+              - field: action.parameters.permanent
+                operator: eq
+                value: true
+              - field: action.parameters.duration
+                operator: eq
+                value: "permanent"
+    approvalConfig:
+      expiresIn: "1h"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "moderation-team-lead"
+
+  # ── Rule 5: Require approval — content removal ────────────────────
+  - id: require-approval-content-removal
+    name: "Require approval for content removal"
+    description: >
+      Hiding, suppressing, or removing content from public view
+      requires a human moderator to confirm the decision. Content
+      removal affects the original poster and may have legal
+      implications (DMCA, etc.).
+    effect: require_approval
+    condition:
+      any:
+        - field: action.type
+          operator: matches
+          value: "^content\\.(remove|hide|suppress|takedown)$"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "content"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "remove"
+                - field: action.type
+                  operator: contains
+                  value: "hide"
+                - field: action.type
+                  operator: contains
+                  value: "suppress"
+                - field: action.type
+                  operator: contains
+                  value: "takedown"
+    approvalConfig:
+      expiresIn: "2h"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "senior-moderator"
+
+  # ── Rule 6: Require approval — user warnings ─────────────────────
+  - id: require-approval-user-warnings
+    name: "Require approval for user warnings"
+    description: >
+      Formal user warnings go into the user's account record and
+      can affect future moderation decisions. A human moderator
+      should confirm warnings before they are issued.
+    effect: require_approval
+    condition:
+      any:
+        - field: action.type
+          operator: matches
+          value: "^user\\.(warn|warning\\.issue)$"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "user"
+            - field: action.type
+              operator: contains
+              value: "warn"
+    approvalConfig:
+      expiresIn: "4h"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "moderator"
+
+  # ── Rule 7: Require approval — DMCA and legal takedowns ───────────
+  # Legal takedown requests require legal team review, not just
+  # a senior moderator. Two approvers are required.
+  - id: require-approval-legal-takedown
+    name: "Require approval for legal and DMCA takedowns"
+    description: >
+      DMCA notices and other legal takedown requests require
+      sign-off from both a senior moderator and the legal team.
+      These have significant legal implications if mishandled.
+    effect: require_approval
+    condition:
+      any:
+        - field: action.type
+          operator: contains
+          value: "dmca"
+        - field: action.type
+          operator: contains
+          value: "legal-takedown"
+        - field: action.parameters.reason
+          operator: eq
+          value: "copyright"
+    approvalConfig:
+      expiresIn: "48h"
+      requiredApprovals: 2
+      approvers:
+        - type: role
+          id: "senior-moderator"
+        - type: role
+          id: "legal-team"
+
+  # ── Rule 8: Allow content review ──────────────────────────────────
+  - id: allow-content-review
+    name: "Allow content reading and inspection"
+    description: >
+      Permit the agent to read, view, and inspect content items
+      for moderation purposes. Includes reading post content,
+      images, profiles, and account history.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".view"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".inspect"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "content"
+            - field: action.resource
+              operator: contains
+              value: "posts"
+            - field: action.resource
+              operator: contains
+              value: "comments"
+            - field: action.resource
+              operator: contains
+              value: "profiles"
+            - field: action.resource
+              operator: contains
+              value: "media"
+            - field: action.resource
+              operator: contains
+              value: "reports"
+    rateLimit:
+      requests: 1000
+      window: "1h"
+      scope: principal
+
+  # ── Rule 9: Allow content flagging ───────────────────────────────
+  - id: allow-content-flagging
+    name: "Allow flagging content for human review"
+    description: >
+      Permit the agent to flag content items as requiring human
+      review. Flagging is non-destructive — it adds a review tag
+      and routes the item to the moderation queue without removing
+      it from public view.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: contains
+          value: "content.flag"
+        - field: action.type
+          operator: contains
+          value: "content.report"
+        - field: action.type
+          operator: contains
+          value: "content.tag"
+        - field: action.type
+          operator: contains
+          value: "content.mark"
+
+  # ── Rule 10: Allow queue management ──────────────────────────────
+  - id: allow-queue-management
+    name: "Allow moderation queue management"
+    description: >
+      Permit the agent to manage the moderation queue: reading
+      queue items, assigning items to human moderators, changing
+      queue priority, and marking items as reviewed. Queue
+      management actions do not affect content visibility.
+    effect: allow
+    condition:
+      all:
+        - field: action.resource
+          operator: contains
+          value: "queue"
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: contains
+              value: "assign"
+            - field: action.type
+              operator: contains
+              value: "prioritize"
+            - field: action.type
+              operator: contains
+              value: "close"
+            - field: action.type
+              operator: contains
+              value: "escalate"
+
+  # ── Rule 11: Allow mutes and short restrictions ───────────────────
+  - id: allow-short-mutes
+    name: "Allow short mutes (under 24 hours)"
+    description: >
+      The agent may mute or restrict users for short periods
+      (under 24 hours) without approval. Mutes affect posting
+      ability but not account access. Longer restrictions and
+      bans go through the approval flow.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "user.mute"
+            - field: action.type
+              operator: contains
+              value: "user.restrict"
+        - field: action.parameters.durationHours
+          operator: lte
+          value: 24
+
+  # ── Rule 12: Deny everything else ─────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    effect: deny
+
+# Session rules for moderation safety.
+sessionRules:
+  # Moderation agents should not take more than 500 actions
+  # per session. High action counts warrant human oversight.
+  maxActionsPerSession: 500
+
+  # Detect aggressive moderation pattern: flagging many items
+  # and then executing a ban in quick succession may indicate
+  # an automated ban sweep that should be reviewed.
+  forbiddenSequences:
+    - id: mass-flag-then-ban
+      name: "Multiple flags followed by a ban"
+      sequence:
+        - "content.flag"
+        - "content.flag"
+        - "content.flag"
+        - "user.ban*"
+      effect: require_approval
+      reason: >
+        Flagging multiple content items followed by a ban action
+        may indicate a mass moderation sweep. Requires senior
+        moderator review.
+      lookbackActions: 10
+
+  # Risk scoring for moderation sessions
+  sessionRiskThreshold:
+    maxScore: 100
+    effect: require_approval
+    riskWeights:
+      "user.ban.*": 30
+      "user.warn*": 10
+      "content.remove*": 15
+      "content.delete*": 25
+      "content.takedown*": 20
+      "content.flag": 2
+      "content.review*": 1
+
+defaultEffect: deny
+
+metadata:
+  category: content-moderation
+  compliance:
+    - GDPR
+    - EU-DSA
+    - DMCA
+  owner: "trust-and-safety-team"
+  reviewCycle: "monthly"
+  tags:
+    - template
+    - content-moderation
+    - trust-and-safety
+    - human-in-the-loop

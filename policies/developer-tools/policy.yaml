@@ -1,0 +1,481 @@
+# ============================================================
+# Authensor Policy Template: Developer Tools
+# ============================================================
+# Policy for AI agents that write, test, and deploy code.
+# These agents have significant power: they can write files,
+# run commands, install packages, and deploy applications.
+#
+# Key safety boundaries:
+#   - Production deployments always require approval
+#   - Database migrations always require approval
+#   - Secrets and credentials are never accessible
+#   - Staging deployments require approval
+#   - Local operations (test runs, linting, builds) are free
+#
+# The threat model here is:
+#   1. An agent that makes an unintended production change
+#   2. Supply chain attacks via malicious package installation
+#   3. Credential exfiltration via secrets access
+#   4. Privilege escalation via config read → exec sequence
+
+id: developer-tools-v1
+name: "Developer Tools Agent"
+version: "1.0.0"
+description: >
+  Policy for code-writing and deployment agents. Hard-blocks
+  production deployments without approval, database migrations,
+  and secrets access. Requires approval for staging deployments,
+  PR merges, and package installations. Allows read operations,
+  test runs, linting, and local builds freely.
+
+enabled: true
+priority: 75
+
+scope:
+  principalTypes:
+    - agent
+  environments:
+    - development
+    - staging
+    - production
+
+rules:
+
+  # ── Rule 1: Hard block — production deployments ───────────────────
+  # No agent may deploy to production without going through the
+  # approval flow first. This is the single most important rule
+  # in this policy.
+  - id: deny-production-deploy
+    name: "Block production deployments without approval"
+    description: >
+      Deny any deployment action targeting the production environment.
+      Production deployments must always go through the approval
+      workflow (rule 4) — this rule ensures there is no path to
+      production without a human sign-off.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "deploy"
+            - field: action.type
+              operator: contains
+              value: "release"
+            - field: action.type
+              operator: contains
+              value: "rollout"
+            - field: action.type
+              operator: contains
+              value: "promote"
+        # Match any of the common production environment indicators
+        - any:
+            - field: action.parameters.environment
+              operator: eq
+              value: "production"
+            - field: action.parameters.environment
+              operator: eq
+              value: "prod"
+            - field: action.resource
+              operator: contains
+              value: "production"
+            - field: action.resource
+              operator: contains
+              value: "/prod/"
+            - field: context.targetEnvironment
+              operator: eq
+              value: "production"
+
+  # ── Rule 2: Hard block — database migrations ──────────────────────
+  # DB schema migrations are irreversible operations. They must
+  # always be reviewed and approved before execution.
+  - id: deny-db-migrations
+    name: "Block database migration execution"
+    description: >
+      Deny direct execution of database migrations. Migrations
+      can cause data loss, downtime, and irreversible schema changes.
+      Route through the approval workflow.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: contains
+          value: "migration"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "db"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "schema"
+                - field: action.type
+                  operator: contains
+                  value: "migrate"
+                - field: action.type
+                  operator: contains
+                  value: "alter"
+                - field: action.type
+                  operator: contains
+                  value: "drop"
+        - field: action.resource
+          operator: contains
+          value: "migrations"
+
+  # ── Rule 3: Hard block — secrets and credentials access ───────────
+  # The agent must never be allowed to read secrets, API keys,
+  # credentials, or private keys. This prevents both exfiltration
+  # and supply chain attack vectors.
+  - id: deny-secrets-access
+    name: "Block access to secrets and credentials"
+    description: >
+      Deny any action that accesses secret stores, credential
+      vaults, or private key material. This includes env file
+      reads, secrets manager queries, and certificate private key
+      exports.
+    effect: deny
+    condition:
+      any:
+        - field: action.resource
+          operator: contains
+          value: "secrets"
+        - field: action.resource
+          operator: contains
+          value: "credentials"
+        - field: action.resource
+          operator: contains
+          value: ".env"
+        - field: action.resource
+          operator: contains
+          value: "vault"
+        - field: action.resource
+          operator: contains
+          value: "private-key"
+        - field: action.type
+          operator: contains
+          value: "secrets.read"
+        - field: action.type
+          operator: contains
+          value: "credentials.get"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.(secret|credential|private_key)\\.(read|get|list)$"
+
+  # ── Rule 4: Require approval — staging deployments ────────────────
+  # Staging deployments are lower risk than production but still
+  # require a peer review since staging is often shared infrastructure.
+  - id: require-approval-staging-deploy
+    name: "Require approval for staging deployments"
+    description: >
+      Deployment actions targeting the staging environment require
+      one approver (typically a peer engineer or tech lead).
+      Approval expires in 2 hours.
+    effect: require_approval
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "deploy"
+            - field: action.type
+              operator: contains
+              value: "release"
+            - field: action.type
+              operator: contains
+              value: "rollout"
+        - any:
+            - field: action.parameters.environment
+              operator: eq
+              value: "staging"
+            - field: action.resource
+              operator: contains
+              value: "staging"
+            - field: context.targetEnvironment
+              operator: eq
+              value: "staging"
+    approvalConfig:
+      expiresIn: "2h"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "engineer"
+
+  # ── Rule 5: Require approval — PR merges ──────────────────────────
+  - id: require-approval-pr-merge
+    name: "Require approval for PR merges"
+    description: >
+      Merging pull requests requires a code reviewer to approve.
+      The agent may not merge its own PRs without human sign-off.
+    effect: require_approval
+    condition:
+      any:
+        - field: action.type
+          operator: matches
+          value: "^.*\\.(pr|pull_request)\\.merge$"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "github"
+            - field: action.type
+              operator: contains
+              value: "merge"
+    approvalConfig:
+      expiresIn: "24h"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "code-reviewer"
+
+  # ── Rule 6: Require approval — package installations ──────────────
+  - id: require-approval-package-install
+    name: "Require approval for package installations"
+    description: >
+      Installing new packages or dependencies requires approval
+      to prevent supply chain attacks. This includes npm, pip,
+      cargo, gem, and any other package manager install commands.
+    effect: require_approval
+    condition:
+      any:
+        - field: action.type
+          operator: matches
+          value: "^.*\\.(npm|pip|cargo|gem|brew|apt)\\.install$"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "package"
+            - field: action.type
+              operator: contains
+              value: "install"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.dependency\\.add$"
+    approvalConfig:
+      expiresIn: "1h"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "tech-lead"
+
+  # ── Rule 7: Allow code reads and searches ─────────────────────────
+  - id: allow-code-reads
+    name: "Allow code reads, file searches, and grep"
+    description: >
+      Permit the agent to read files, search codebases, and
+      inspect code. These are non-mutating and required for
+      any coding agent to function.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: endsWith
+          value: ".read"
+        - field: action.type
+          operator: endsWith
+          value: ".search"
+        - field: action.type
+          operator: endsWith
+          value: ".grep"
+        - field: action.type
+          operator: endsWith
+          value: ".find"
+        - field: action.type
+          operator: endsWith
+          value: ".list"
+        - field: action.type
+          operator: endsWith
+          value: ".diff"
+        - field: action.type
+          operator: endsWith
+          value: ".log"
+    rateLimit:
+      requests: 2000
+      window: "1h"
+      scope: principal
+
+  # ── Rule 8: Allow test runs ───────────────────────────────────────
+  - id: allow-test-runs
+    name: "Allow test suite execution"
+    description: >
+      Permit running test suites (unit, integration, e2e).
+      Test runners are isolated and do not directly mutate
+      production state.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: contains
+          value: "test.run"
+        - field: action.type
+          operator: contains
+          value: "tests.run"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.(vitest|jest|pytest|rspec|cargo_test)\\.run$"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "ci"
+            - field: action.type
+              operator: contains
+              value: "test"
+    rateLimit:
+      requests: 50
+      window: "1h"
+      scope: principal
+
+  # ── Rule 9: Allow linting and static analysis ─────────────────────
+  - id: allow-linting
+    name: "Allow linting and static analysis"
+    description: >
+      Permit linting, type-checking, formatting checks, and
+      static analysis runs. These are read-only analysis
+      operations with no side effects.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: contains
+          value: "lint"
+        - field: action.type
+          operator: contains
+          value: "typecheck"
+        - field: action.type
+          operator: contains
+          value: "format.check"
+        - field: action.type
+          operator: contains
+          value: "static-analysis"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.(eslint|tsc|prettier|biome|ruff)\\.run$"
+
+  # ── Rule 10: Allow local builds ───────────────────────────────────
+  - id: allow-local-builds
+    name: "Allow local build execution"
+    description: >
+      Permit local build runs (compile, bundle, transpile).
+      These produce build artifacts but do not deploy them.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "build"
+            - field: action.type
+              operator: contains
+              value: "compile"
+            - field: action.type
+              operator: contains
+              value: "bundle"
+        # Must NOT be a deploy — prevents accidentally matching
+        # "build-and-deploy" composite actions
+        - not:
+            any:
+              - field: action.type
+                operator: contains
+                value: "deploy"
+              - field: action.parameters.environment
+                operator: in
+                value: ["production", "prod", "staging"]
+    rateLimit:
+      requests: 20
+      window: "1h"
+      scope: principal
+
+  # ── Rule 11: Allow file writes to non-sensitive paths ─────────────
+  - id: allow-file-writes
+    name: "Allow file writes outside sensitive paths"
+    description: >
+      Permit file creation and modification for source code files.
+      Blocked if the path is in sensitive locations (secrets,
+      config, .env files are caught by rule 3).
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "file.write"
+            - field: action.type
+              operator: contains
+              value: "file.create"
+            - field: action.type
+              operator: contains
+              value: "file.edit"
+        - not:
+            any:
+              - field: action.resource
+                operator: contains
+                value: ".env"
+              - field: action.resource
+                operator: contains
+                value: "secrets"
+              - field: action.resource
+                operator: contains
+                value: "/etc/"
+              - field: action.resource
+                operator: contains
+                value: "~/.ssh"
+
+  # ── Rule 12: Deny everything else ─────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    effect: deny
+
+# Session rules protect against privilege escalation patterns
+# that are common in agentic coding contexts.
+sessionRules:
+  # Cap total actions per agent session (one coding task)
+  maxActionsPerSession: 300
+
+  # Classic privilege escalation: read config/env then exec shell
+  forbiddenSequences:
+    - id: config-read-then-shell-exec
+      name: "Config read followed by shell execution"
+      sequence:
+        - "file.read"
+        - "shell.exec"
+      effect: deny
+      reason: >
+        Reading configuration or credential files followed by shell
+        execution is a privilege escalation pattern. Denied.
+      lookbackActions: 5
+
+    - id: secrets-access-then-network
+      name: "Secrets/credentials access followed by network call"
+      sequence:
+        - "*.secret*"
+        - "http.*"
+      effect: deny
+      reason: >
+        Accessing secrets followed by a network call is a credential
+        exfiltration pattern. Denied.
+      lookbackActions: 3
+
+  # Risk scoring for the session
+  sessionRiskThreshold:
+    maxScore: 80
+    effect: require_approval
+    riskWeights:
+      "shell.exec": 15
+      "*.deploy": 25
+      "*.migrate": 30
+      "*.install": 10
+      "file.write": 2
+      "file.delete": 20
+
+defaultEffect: deny
+
+metadata:
+  category: developer-tools
+  compliance:
+    - SOC2-CC6
+  owner: "platform-engineering"
+  reviewCycle: "quarterly"
+  tags:
+    - template
+    - developer
+    - deployment
+    - code-agent
+    - supply-chain-security

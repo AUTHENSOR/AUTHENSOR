@@ -29,6 +29,11 @@ RUN pnpm build --filter=@authensor/control-plane...
 
 # Production
 FROM base AS runner
+LABEL org.opencontainers.image.title="Authensor Control Plane"
+LABEL org.opencontainers.image.description="The open-source safety stack for AI agents"
+LABEL org.opencontainers.image.url="https://authensor.com"
+LABEL org.opencontainers.image.source="https://github.com/authensor/authensor"
+LABEL org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -42,6 +47,7 @@ COPY --from=builder /app/packages/aegis/package.json ./packages/aegis/
 COPY --from=builder /app/packages/sentinel/dist ./packages/sentinel/dist
 COPY --from=builder /app/packages/sentinel/package.json ./packages/sentinel/
 COPY --from=builder /app/packages/control-plane/dist ./packages/control-plane/dist
+COPY --from=builder /app/packages/control-plane/src/migrations ./packages/control-plane/src/migrations
 COPY --from=builder /app/packages/control-plane/package.json ./packages/control-plane/
 
 # Copy workspace config for internal deps resolution

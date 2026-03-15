@@ -1,0 +1,122 @@
+# ============================================================
+# Authensor Policy Template: Starter (Safe-by-Default)
+# ============================================================
+# This is the simplest possible policy. It demonstrates the
+# core schema structure and is intended for first-time users
+# who want to start with a locked-down baseline.
+#
+# Evaluation order: rules are checked top to bottom.
+# The first rule that matches wins.
+# If no rule matches, defaultEffect applies (deny).
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: starter-safe-by-default
+name: "Starter — Safe by Default"
+version: "1.0.0"
+description: >
+  Minimal safe-by-default policy for new Authensor users.
+  Allows read-only operations on any resource.
+  Denies all write, execute, delete, and admin actions.
+  A good starting point before layering more specific rules.
+
+# Whether this policy is active. Set to false to disable without
+# deleting. Useful for staging or rollback.
+enabled: true
+
+# Higher numbers are evaluated first when multiple policies exist.
+# Keep the starter policy at low priority so domain-specific
+# policies (healthcare, finance, etc.) take precedence.
+priority: 0
+
+# Scope narrows which envelopes this policy even considers.
+# Leave scope empty (or omit it) to match all action types,
+# all principal types, and all environments.
+scope:
+  # Uncomment to restrict to specific environments:
+  # environments:
+  #   - development
+  #   - staging
+  principalTypes:
+    - agent
+    - user
+    - service
+
+# Rules are evaluated in order. The FIRST match wins.
+# Remaining rules are not evaluated once a match is found.
+rules:
+
+  # ── Rule 1: Allow read operations ─────────────────────────────────
+  # Matches any action whose type ends with .read, .list, .get,
+  # .search, .view, or .query — the standard "read" verb forms.
+  #
+  # The `any` combinator means: match if ANY sub-condition is true.
+  - id: allow-reads
+    name: "Allow read-only operations"
+    description: >
+      Permit any action that is a read, list, get, search,
+      view, or query. These are non-mutating operations that
+      are generally safe for an agent to perform without
+      human approval.
+    effect: allow
+    condition:
+      any:
+        # Exact read verbs via glob-style suffix matching
+        - field: action.type
+          operator: endsWith
+          value: ".read"
+        - field: action.type
+          operator: endsWith
+          value: ".list"
+        - field: action.type
+          operator: endsWith
+          value: ".get"
+        - field: action.type
+          operator: endsWith
+          value: ".search"
+        - field: action.type
+          operator: endsWith
+          value: ".view"
+        - field: action.type
+          operator: endsWith
+          value: ".query"
+        # Also allow actions whose type starts with "read." or "list."
+        - field: action.type
+          operator: startsWith
+          value: "read."
+        - field: action.type
+          operator: startsWith
+          value: "list."
+
+  # ── Rule 2: Explicit deny for all other actions ────────────────────
+  # This rule has no condition, so it matches everything that
+  # fell through rule 1. The explicit deny here is redundant
+  # (defaultEffect: deny handles it), but it makes the intent
+  # visible in audit logs and is good documentation practice.
+  - id: deny-all-writes
+    name: "Deny writes, mutations, and admin actions"
+    description: >
+      Explicitly deny everything that is not a read. This
+      ensures the audit trail shows a deliberate policy decision
+      rather than a default fallthrough.
+    effect: deny
+
+# What happens when no rule matches.
+# "deny" = fail-closed. This is the Authensor default and
+# the correct choice for any production deployment.
+defaultEffect: deny
+
+# Metadata is free-form. Use it for compliance tagging,
+# ownership, and change tracking.
+metadata:
+  category: starter
+  compliance: []
+  owner: "platform-team"
+  tags:
+    - template
+    - read-only
+    - safe-by-default
+  notes: >
+    Replace this policy with a domain-specific template once
+    you understand what actions your agent needs to perform.
+    See the other templates in this directory for examples.

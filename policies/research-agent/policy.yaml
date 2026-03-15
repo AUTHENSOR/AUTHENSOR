@@ -1,0 +1,397 @@
+# ============================================================
+# Authensor Policy Template: Research Agent
+# ============================================================
+# Policy for an agent that searches the web, reads public content,
+# and synthesises information into summaries or reports.
+#
+# Research agents are generally lower-risk than transactional agents
+# but still have important safety boundaries:
+#
+#   1. High-rate scraping can violate ToS and create legal exposure
+#   2. Accessing paywalled content without authorisation is a legal risk
+#   3. Downloading files can introduce malware or copyright issues
+#   4. Authenticated resource access can expose credentials
+#   5. Synthesising from unreliable sources risks spreading misinformation
+#
+# Design philosophy:
+#   - Web search and public page reads are free (most common operations)
+#   - Downloads need approval (legal and security risk)
+#   - Authenticated access needs approval (credential risk)
+#   - High-rate scraping is blocked by rate limits
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: research-agent
+name: "Research Agent — Search and Synthesise"
+version: "1.0.0"
+description: >
+  Policy for a research agent that searches the web and reads public content.
+  Allows web search, public page reads, and content summarisation. Blocks
+  paywalled content access and high-rate scraping. Requires approval for
+  file downloads and authenticated resource access. Session is bounded to
+  prevent excessive resource consumption.
+
+enabled: true
+priority: 10
+
+scope:
+  principalTypes:
+    - agent
+  environments:
+    - development
+    - staging
+    - production
+
+# ── Session-level controls ────────────────────────────────────────────
+# Research sessions can run for a long time. Bound the total action
+# count and risk score to detect runaway agents.
+sessionRules:
+  # A research session should complete within 500 actions.
+  # If a session runs longer, it likely needs human guidance on focus.
+  maxActionsPerSession: 500
+
+  forbiddenSequences:
+    - id: paywall-bypass-attempt
+      # Attempting to read a paywalled resource, then using auth actions
+      # to try to get credentials is a ToS violation pattern.
+      sequence:
+        - "http.get"
+        - "auth.**"
+        - "http.get"
+      effect: deny
+      lookbackActions: 4
+      reason: >
+        HTTP read followed by authentication actions followed by another
+        HTTP read detected. This may indicate an attempt to bypass
+        a paywall using credential lookup. Denied.
+
+    - id: bulk-download-pattern
+      # Three consecutive downloads suggests bulk data collection
+      # rather than targeted research.
+      sequence:
+        - "file.download"
+        - "file.download"
+        - "file.download"
+      effect: require_approval
+      lookbackActions: 4
+      reason: >
+        Three consecutive file downloads detected. Bulk downloading
+        may violate terms of service or create copyright exposure.
+        Human review required before further downloads.
+
+    - id: high-frequency-scrape
+      # Rapid navigation to many different pages suggests scraping
+      # rather than reading for research.
+      sequence:
+        - "browser.navigate"
+        - "browser.navigate"
+        - "browser.navigate"
+        - "browser.navigate"
+        - "browser.navigate"
+      effect: require_approval
+      lookbackActions: 5
+      reason: >
+        Five consecutive navigations detected in a 5-action window.
+        High-frequency scraping may violate site terms of service.
+        Please confirm the research task requires this access pattern.
+
+  sessionRiskThreshold:
+    maxScore: 50
+    effect: require_approval
+    riskWeights:
+      "file.download": 10             # downloads carry high risk
+      "auth.**": 8                    # any auth action is high risk
+      "browser.form.submit": 6        # form submits are risky
+      "http.post": 5                  # outbound POSTs are risky
+      "browser.navigate": 1           # navigation carries small cost
+      "browser.read": 0               # reads are free
+      "search.query": 0               # searches are free
+      "summarise": 0                  # synthesis is free
+      "text.extract": 0               # extraction is free
+
+rules:
+
+  # ── Rule 1: Block paywalled content access ────────────────────────────
+  # Access to paywalled content without proper authorisation is a
+  # legal risk. Block any request that the envelope tags as paywalled
+  # (via action.parameters.requiresSubscription) without an existing
+  # authorised subscription credential.
+  - id: block-paywall-bypass
+    name: "Block paywalled content access without authorisation"
+    description: >
+      If the envelope indicates the target resource requires a paid
+      subscription (action.parameters.requiresSubscription: true) and
+      the principal does not carry an authorised subscription credential
+      (context.hasSubscriptionAccess is not true), the request is denied.
+      Prevents terms-of-service violations and copyright infringement.
+    effect: deny
+    condition:
+      all:
+        - field: action.parameters.requiresSubscription
+          operator: eq
+          value: true
+        - not:
+            field: context.hasSubscriptionAccess
+            operator: eq
+            value: true
+
+  # ── Rule 2: Block file downloads ─────────────────────────────────────
+  # File downloads require explicit approval. See rule 7 for the
+  # approval path.
+  - id: block-file-downloads
+    name: "Block autonomous file downloads"
+    description: >
+      Autonomous file downloads are blocked. The agent must seek approval
+      via rule 7 for each download. Reasons: malware risk, copyright
+      concerns, large file size, and terms-of-service compliance.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "file.download"
+        - field: action.type
+          operator: eq
+          value: "browser.download"
+        - all:
+            - field: action.type
+              operator: eq
+              value: "http.get"
+            - field: action.parameters.contentType
+              operator: in
+              value:
+                - "application/pdf"
+                - "application/zip"
+                - "application/x-tar"
+                - "application/octet-stream"
+                - "video/mp4"
+                - "video/mpeg"
+                - "audio/mpeg"
+                - "audio/mp4"
+
+  # ── Rule 3: Block high-rate scraping ─────────────────────────────────
+  # More than 60 HTTP requests per minute suggests automated scraping
+  # rather than targeted research. This violates most site ToS and
+  # can result in IP bans.
+  - id: block-high-rate-scraping
+    name: "Block high-rate HTTP scraping"
+    description: >
+      Requests to the same domain at a rate exceeding 60/minute are
+      denied. Research agents should read pages deliberately, not
+      crawl indiscriminately. If you need bulk access, request it
+      through the site's official data access programme.
+    effect: deny
+    rateLimit:
+      requests: 60
+      window: "1m"
+      scope: "action"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "http.get"
+        - field: action.type
+          operator: eq
+          value: "browser.navigate"
+        - field: action.type
+          operator: eq
+          value: "browser.read"
+
+  # ── Rule 4: Allow web search ──────────────────────────────────────────
+  # Search queries are the lowest-risk research action. Allow freely
+  # with a generous rate limit across all major search engines.
+  - id: allow-web-search
+    name: "Allow web search queries"
+    description: >
+      Search queries via search.query, browser.search, or equivalent
+      are the core of the research workflow. Allowed freely up to
+      200 searches per hour.
+    effect: allow
+    rateLimit:
+      requests: 200
+      window: "1h"
+      scope: "principal"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "search.query"
+        - field: action.type
+          operator: eq
+          value: "browser.search"
+        - field: action.type
+          operator: eq
+          value: "search.academic"
+        - field: action.type
+          operator: startsWith
+          value: "search."
+
+  # ── Rule 5: Allow public page reads ──────────────────────────────────
+  # Reading public (non-paywalled) web content is the other core
+  # research action. Rate-limited to prevent scraping.
+  - id: allow-public-page-reads
+    name: "Allow public page reads"
+    description: >
+      Reading public web pages, extracting text, taking screenshots,
+      and parsing structured content are allowed. Rate-limited to
+      300 requests per hour. Pages flagged as requiresSubscription
+      are caught by rule 1 before reaching this allow rule.
+    effect: allow
+    rateLimit:
+      requests: 300
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: eq
+              value: "browser.read"
+            - field: action.type
+              operator: eq
+              value: "browser.navigate"
+            - field: action.type
+              operator: eq
+              value: "browser.extract"
+            - field: action.type
+              operator: eq
+              value: "browser.screenshot"
+            - field: action.type
+              operator: eq
+              value: "http.get"
+            - field: action.type
+              operator: eq
+              value: "text.extract"
+        # Ensure it's not a subscription-gated resource (rule 1 handles
+        # that, but belt-and-suspenders here).
+        - not:
+            field: action.parameters.requiresSubscription
+            operator: eq
+            value: true
+
+  # ── Rule 6: Allow summarisation and synthesis ─────────────────────────
+  # The output phase: generating summaries, reports, and analyses
+  # from gathered content. These are pure computation — no I/O risk.
+  - id: allow-summarisation-synthesis
+    name: "Allow content summarisation and synthesis"
+    description: >
+      Summarising gathered content, generating reports, extracting
+      key points, and synthesising research outputs are safe and
+      allowed without rate limits. These are pure in-context operations.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "summarise"
+        - field: action.type
+          operator: eq
+          value: "text.summarise"
+        - field: action.type
+          operator: eq
+          value: "report.generate"
+        - field: action.type
+          operator: eq
+          value: "text.translate"
+        - field: action.type
+          operator: eq
+          value: "text.classify"
+        - field: action.type
+          operator: startsWith
+          value: "analysis."
+        - field: action.type
+          operator: startsWith
+          value: "report."
+
+  # ── Rule 7: Require approval for file downloads ───────────────────────
+  # This rule never fires because rule 2 (block-file-downloads) catches
+  # all download actions first. To enable an approval path for downloads,
+  # delete rule 2 and uncomment this rule's condition section.
+  #
+  # Alternatively: have operators submit download requests with a specific
+  # flag (action.parameters.approvalRequested: true) and change rule 2 to
+  # only block when that flag is NOT present.
+  - id: require-approval-file-download
+    name: "Require approval for file downloads (disabled — see rule 2)"
+    description: >
+      Approval path for file downloads when rule 2 is not in effect.
+      Downloads require the supervisor's sign-off on the file URL,
+      expected size, and content type. Approval expires in 30 minutes.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "30m"
+      approvers:
+        - type: "role"
+          id: "research-supervisor"
+    condition:
+      # This condition is intentionally never satisfied when rule 2 exists.
+      # To activate this rule, remove rule 2 and change this condition to:
+      #   field: action.type
+      #   operator: in
+      #   value: ["file.download", "browser.download"]
+      all:
+        - field: action.type
+          operator: eq
+          value: "file.download"
+        - field: action.parameters.approvalRequested
+          operator: eq
+          value: true
+
+  # ── Rule 8: Require approval for authenticated resource access ────────
+  # Academic databases, premium news archives, private APIs — any
+  # access that uses stored credentials requires approval.
+  - id: require-approval-authenticated-access
+    name: "Require approval for authenticated resource access"
+    description: >
+      If the action requires using stored OAuth tokens, API keys, or
+      session credentials to access a resource, human approval is
+      required. Protects stored credentials from being used to access
+      resources the research supervisor has not reviewed.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "1h"
+      approvers:
+        - type: "role"
+          id: "research-supervisor"
+    condition:
+      any:
+        - field: action.parameters.requiresAuth
+          operator: eq
+          value: true
+        - field: action.parameters.useStoredCredentials
+          operator: eq
+          value: true
+        - field: action.type
+          operator: startsWith
+          value: "auth."
+
+  # ── Rule 9: Deny all other actions ────────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    description: >
+      Deny anything not in the research vocabulary: no data mutations,
+      no shell execution, no administrative operations. Research agents
+      are read-only by design.
+    effect: deny
+
+defaultEffect: deny
+
+metadata:
+  category: research
+  compliance: []
+  owner: "research-platform-team"
+  tags:
+    - template
+    - research
+    - web-search
+    - read-only
+    - rate-limited
+  notes: >
+    The paywalled content detection in rule 1 depends on the agent
+    correctly setting action.parameters.requiresSubscription. This field
+    must be populated by the agent or a pre-processing step that inspects
+    the response headers (HTTP 402, 401 + WWW-Authenticate paywall signals).
+    Without this signal, paywalled content access cannot be detected
+    automatically.

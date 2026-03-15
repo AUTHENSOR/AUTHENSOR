@@ -1,0 +1,437 @@
+# ============================================================
+# Authensor Policy Template: E-Commerce / Shopping
+# ============================================================
+# Policy for shopping and purchasing agents. Allows product
+# discovery and cart management freely, gates purchases above
+# $50 behind approval, and hard-blocks large purchases and
+# payment method changes.
+#
+# This policy is designed for a personal shopping agent acting
+# on behalf of a single user. Adjust the principal scope if
+# you're building a multi-user shopping service.
+
+id: e-commerce-v1
+name: "E-Commerce Shopping Agent"
+version: "1.0.0"
+description: >
+  Policy for shopping and purchasing agents. Blocks purchases
+  above $500 and payment method changes. Requires approval for
+  purchases above $50 and address changes. Allows product search,
+  cart management, and order tracking freely. Enforces a $500/day
+  spend budget per user.
+
+enabled: true
+priority: 50
+
+scope:
+  principalTypes:
+    - agent
+    - user
+  environments:
+    - production
+    - staging
+
+rules:
+
+  # ── Rule 1: Hard block — purchases above $500 ─────────────────────
+  # No autonomous purchase above $500. This is the primary financial
+  # protection rule. No approval path exists for purchases above
+  # this limit — they must be initiated by the user directly.
+  - id: deny-large-purchases
+    name: "Block purchases above $500"
+    description: >
+      Deny any purchase, checkout, or order placement action where
+      constraints.maxAmount exceeds $500. This is a hard limit with
+      no approval override — the user must complete large purchases
+      directly through the storefront.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "purchase"
+            - field: action.type
+              operator: contains
+              value: "checkout"
+            - field: action.type
+              operator: contains
+              value: "order.place"
+            - field: action.type
+              operator: contains
+              value: "order.create"
+            - field: action.type
+              operator: contains
+              value: "buy"
+        - field: constraints.maxAmount
+          operator: gt
+          value: 500
+
+  # ── Rule 2: Hard block — changing payment methods ─────────────────
+  # Payment method changes are a high-fraud-risk operation.
+  # The agent must never modify the user's payment methods.
+  # Users must do this directly.
+  - id: deny-payment-method-changes
+    name: "Block payment method modifications"
+    description: >
+      Deny any action that adds, removes, or changes payment methods,
+      bank accounts, or billing information. Payment method management
+      must be done by the user directly, not by the agent.
+    effect: deny
+    condition:
+      any:
+        - all:
+            - field: action.type
+              operator: contains
+              value: "payment"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "add"
+                - field: action.type
+                  operator: contains
+                  value: "update"
+                - field: action.type
+                  operator: contains
+                  value: "delete"
+                - field: action.type
+                  operator: contains
+                  value: "change"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "billing"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "update"
+                - field: action.type
+                  operator: contains
+                  value: "change"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.credit_card\\.(add|delete|update)$"
+
+  # ── Rule 3: Require approval — purchases $50–$500 ─────────────────
+  - id: require-approval-purchases
+    name: "Require approval for purchases $50–$500"
+    description: >
+      Purchases between $50 and $500 require the user to confirm
+      before the order is placed. Approval expires in 5 minutes
+      to keep the shopping flow responsive.
+    effect: require_approval
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "purchase"
+            - field: action.type
+              operator: contains
+              value: "checkout"
+            - field: action.type
+              operator: contains
+              value: "order.place"
+            - field: action.type
+              operator: contains
+              value: "order.create"
+        - field: constraints.maxAmount
+          operator: gte
+          value: 50
+        - field: constraints.maxAmount
+          operator: lte
+          value: 500
+    approvalConfig:
+      expiresIn: "5m"
+      requiredApprovals: 1
+      approvers:
+        - type: principal
+          id: "owner"
+
+  # ── Rule 4: Require approval — address changes ────────────────────
+  # Shipping address changes are a moderate fraud risk. The user
+  # should confirm before the agent redirects a delivery.
+  - id: require-approval-address-changes
+    name: "Require approval for shipping address changes"
+    description: >
+      Changing the shipping address on an existing order or the
+      default shipping address on the account requires user
+      confirmation. This prevents address-redirect fraud.
+    effect: require_approval
+    condition:
+      any:
+        - all:
+            - field: action.type
+              operator: contains
+              value: "address"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "update"
+                - field: action.type
+                  operator: contains
+                  value: "change"
+                - field: action.type
+                  operator: contains
+                  value: "set"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "shipping"
+            - field: action.type
+              operator: contains
+              value: "address"
+    approvalConfig:
+      expiresIn: "10m"
+      requiredApprovals: 1
+      approvers:
+        - type: principal
+          id: "owner"
+
+  # ── Rule 5: Allow product search ──────────────────────────────────
+  - id: allow-product-search
+    name: "Allow product search and browsing"
+    description: >
+      Permit all product search, browse, and detail view operations.
+      These are read-only discovery operations that the agent needs
+      to fulfill shopping requests.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".search"
+            - field: action.type
+              operator: endsWith
+              value: ".browse"
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: endsWith
+              value: ".view"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "products"
+            - field: action.resource
+              operator: contains
+              value: "catalog"
+            - field: action.resource
+              operator: contains
+              value: "inventory"
+            - field: action.resource
+              operator: contains
+              value: "search"
+            - field: action.resource
+              operator: contains
+              value: "recommendations"
+    rateLimit:
+      requests: 500
+      window: "1h"
+      scope: principal
+
+  # ── Rule 6: Allow cart management ────────────────────────────────
+  - id: allow-cart-management
+    name: "Allow cart add, remove, and update"
+    description: >
+      Permit the agent to manage the user's shopping cart: adding
+      and removing items, updating quantities, and applying coupon
+      codes. Cart operations do not commit financial transactions.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "cart"
+            - field: action.resource
+              operator: contains
+              value: "basket"
+            - field: action.resource
+              operator: contains
+              value: "wishlist"
+        - any:
+            - field: action.type
+              operator: contains
+              value: "add"
+            - field: action.type
+              operator: contains
+              value: "remove"
+            - field: action.type
+              operator: contains
+              value: "update"
+            - field: action.type
+              operator: contains
+              value: "clear"
+            - field: action.type
+              operator: contains
+              value: "apply"
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+
+  # ── Rule 7: Allow order tracking ─────────────────────────────────
+  - id: allow-order-tracking
+    name: "Allow order and shipment tracking reads"
+    description: >
+      Permit read access to order history, order status, shipment
+      tracking, and delivery estimates. Read-only and safe.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".track"
+            - field: action.type
+              operator: endsWith
+              value: ".status"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "orders"
+            - field: action.resource
+              operator: contains
+              value: "shipments"
+            - field: action.resource
+              operator: contains
+              value: "tracking"
+            - field: action.resource
+              operator: contains
+              value: "deliveries"
+            - field: action.resource
+              operator: contains
+              value: "returns"
+
+  # ── Rule 8: Allow small purchases without approval ────────────────
+  # Purchases under $50 are permitted autonomously within the
+  # $500/day budget. This enables routine replenishment orders
+  # without interrupting the user.
+  - id: allow-small-purchases
+    name: "Allow purchases under $50"
+    description: >
+      Permit autonomous purchases where constraints.maxAmount is
+      below $50. Subject to a $500/day cumulative budget per user.
+      Alert thresholds fire at 75%, 90%, and 100% of budget.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "purchase"
+            - field: action.type
+              operator: contains
+              value: "checkout"
+            - field: action.type
+              operator: contains
+              value: "order.place"
+        - field: constraints.maxAmount
+          operator: lt
+          value: 50
+    costBudget:
+      period: "daily"
+      maxBudget: 500
+      maxActionCost: 50
+      alertThresholds: [0.75, 0.9, 1.0]
+
+  # ── Rule 9: Allow price comparison and reviews ────────────────────
+  - id: allow-price-comparison
+    name: "Allow price comparison and review reads"
+    description: >
+      Permit price comparison lookups, product review reads, and
+      competitor price checks. These inform purchasing decisions
+      and are read-only.
+    effect: allow
+    condition:
+      any:
+        - field: action.resource
+          operator: contains
+          value: "reviews"
+        - field: action.resource
+          operator: contains
+          value: "ratings"
+        - field: action.resource
+          operator: contains
+          value: "price-comparison"
+        - field: action.resource
+          operator: contains
+          value: "deals"
+        - field: action.resource
+          operator: contains
+          value: "coupons"
+
+  # ── Rule 10: Deny everything else ─────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    effect: deny
+
+# Session rules for per-session safety.
+sessionRules:
+  # A shopping session should not involve more than 100 actions.
+  # An agent placing hundreds of orders autonomously is a
+  # red flag for runaway spending.
+  maxActionsPerSession: 100
+
+  # Detect rapid repeated purchases — could indicate a bug or
+  # a runaway agent placing duplicate orders.
+  forbiddenSequences:
+    - id: rapid-duplicate-orders
+      name: "Multiple purchases in rapid succession"
+      sequence:
+        - "*.order.*"
+        - "*.order.*"
+        - "*.order.*"
+      effect: require_approval
+      reason: >
+        Three or more order actions in rapid succession may indicate
+        duplicate order placement. Requires user confirmation.
+      lookbackActions: 5
+
+  # Session risk scoring — heavy purchase activity triggers review
+  sessionRiskThreshold:
+    maxScore: 50
+    effect: require_approval
+    riskWeights:
+      "*.purchase": 10
+      "*.checkout": 10
+      "*.order.place": 10
+      "*.order.create": 10
+      "address.*": 5
+      "payment.*": 20
+
+defaultEffect: deny
+
+metadata:
+  category: e-commerce
+  compliance:
+    - PCI-DSS
+    - GDPR
+  owner: "commerce-platform-team"
+  reviewCycle: "quarterly"
+  tags:
+    - template
+    - e-commerce
+    - shopping
+    - purchasing
+    - budget-control

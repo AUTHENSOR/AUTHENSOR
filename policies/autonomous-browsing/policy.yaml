@@ -1,0 +1,348 @@
+# ============================================================
+# Authensor Policy Template: Autonomous Web Browsing Agent
+# ============================================================
+# Policy for an agent that autonomously browses the web:
+# reading pages, running searches, and navigating between sites.
+#
+# The main risks for a browsing agent are:
+#   1. Navigating to unknown/malicious domains
+#   2. Submitting forms with PII data
+#   3. Downloading executable files or large data sets
+#   4. Infinite navigation loops consuming credits
+#   5. Accessing authenticated/paywalled resources
+#
+# Design philosophy: reads are free, form submissions need approval,
+# downloads need approval, unknown domains are blocked.
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: autonomous-browsing
+name: "Autonomous Web Browsing Agent"
+version: "1.0.0"
+description: >
+  Policy for an agent that reads web pages, performs searches, and
+  navigates between sites. Blocks form submissions, file downloads,
+  and navigation to non-allowlisted domains. Requires approval for
+  form fills that contain PII fields or file uploads. Allows reads
+  and searches on public content. Session is capped at 100 navigations
+  to prevent runaway loops.
+
+enabled: true
+priority: 10
+
+scope:
+  principalTypes:
+    - agent
+  # Browsing agents typically run in all environments; scope is
+  # not restricted by environment here so the same policy works
+  # in staging and production.
+
+# ── Session-level controls ────────────────────────────────────────────
+# Navigation loops are the primary denial-of-service vector for
+# browsing agents. maxActionsPerSession hard-caps at 100 navigations.
+# Risk scoring detects escalating patterns (e.g., read → form submit
+# → download chains that suggest data harvesting).
+sessionRules:
+  # Hard cap: 100 navigations per session. Prevents infinite loops
+  # and limits the blast radius of a misbehaving agent.
+  maxActionsPerSession: 100
+
+  # Detect patterns that suggest the agent is harvesting or exfiltrating.
+  forbiddenSequences:
+    - id: scrape-and-exfil
+      # Rapid-fire page reads followed by a file download is suspicious.
+      sequence:
+        - "browser.navigate"
+        - "browser.navigate"
+        - "browser.navigate"
+        - "browser.download"
+      effect: require_approval
+      lookbackActions: 5
+      reason: >
+        Multiple consecutive navigation actions followed by a download
+        detected. This pattern may indicate automated scraping or
+        data harvesting. Human review required before download proceeds.
+
+    - id: form-after-sensitive-read
+      # Reading a page with auth-related content and then submitting
+      # a form is a credential-phishing risk pattern.
+      sequence:
+        - "browser.navigate"
+        - "browser.form.submit"
+      effect: require_approval
+      lookbackActions: 2
+      reason: >
+        Navigation immediately followed by form submission requires
+        approval to verify the destination and form content are safe.
+
+  # Session risk score. Downloads and form submits carry high cost;
+  # reads and searches are free. Threshold of 30 means the agent
+  # can do ~30 navigations OR ~3 downloads before needing approval.
+  sessionRiskThreshold:
+    maxScore: 30
+    effect: require_approval
+    riskWeights:
+      "browser.download": 10           # downloads are high risk
+      "browser.form.submit": 8         # form submits are high risk
+      "browser.form.fill": 3           # filling (not submitting) is lower risk
+      "browser.navigate": 1            # navigation is low risk
+      "browser.read": 0                # page reads are zero risk
+      "browser.screenshot": 0         # screenshots are zero risk
+      "search.query": 0                # searches are zero risk
+
+rules:
+
+  # ── Rule 1: Block navigation to unknown domains ───────────────────────
+  # Only allowlisted domains may be navigated to autonomously.
+  # The allowedDomains constraint is enforced at the constraint layer;
+  # this rule blocks navigations where the target domain is not on the
+  # list of known-safe domains.
+  #
+  # IMPORTANT: Update the allowedDomains list to match your agent's
+  # actual target sites. The list below is illustrative only.
+  - id: block-unknown-domain-navigation
+    name: "Block navigation to non-allowlisted domains"
+    description: >
+      Only allow navigation to explicitly allowlisted domains.
+      Any attempt to navigate to an unknown domain is denied.
+      This prevents the agent from being redirected to malicious
+      sites via open redirects or adversarial web content.
+    effect: deny
+    constraints:
+      # This block fires for any navigation that requests domains
+      # outside the allowed list. The constraint enforcer will
+      # compare envelope's allowedDomains against this policy list.
+      allowedDomains:
+        # Web search providers
+        - "www.google.com"
+        - "www.bing.com"
+        - "duckduckgo.com"
+        - "search.yahoo.com"
+        # Reference sites (safe, public, read-only)
+        - "en.wikipedia.org"
+        - "docs.github.com"
+        - "developer.mozilla.org"
+        - "stackoverflow.com"
+        # News aggregators
+        - "news.ycombinator.com"
+        - "www.bbc.com"
+        - "reuters.com"
+        # ADD YOUR AGENT'S TARGET DOMAINS HERE
+        # - "your-domain.com"
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "browser.navigate"
+        # The envelope's target domain is NOT in the allowlisted set.
+        # Evaluated via the constraint enforcer violation check.
+        - not:
+            field: action.parameters.domain
+            operator: in
+            value:
+              - "www.google.com"
+              - "www.bing.com"
+              - "duckduckgo.com"
+              - "search.yahoo.com"
+              - "en.wikipedia.org"
+              - "docs.github.com"
+              - "developer.mozilla.org"
+              - "stackoverflow.com"
+              - "news.ycombinator.com"
+              - "www.bbc.com"
+              - "reuters.com"
+
+  # ── Rule 2: Block all file downloads ──────────────────────────────────
+  # Downloads are blocked by default. They require explicit approval
+  # (see rule 5). This catch-all prevents surprise auto-downloads.
+  - id: block-downloads
+    name: "Block file downloads"
+    description: >
+      Autonomous file downloads are disabled. Downloads must be
+      explicitly approved via the require_approval rule below.
+      Prevents accidental download of executables, large datasets,
+      or sensitive documents.
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: "browser.download"
+
+  # ── Rule 3: Block form submissions ────────────────────────────────────
+  # Submitting forms can have irreversible side effects: account creation,
+  # data submission, purchases. Block all form submits without approval.
+  - id: block-form-submissions
+    name: "Block autonomous form submissions"
+    description: >
+      Form submissions can mutate server state irreversibly. All form
+      submits are blocked unless they receive explicit approval via
+      rule 6. The agent may fill fields (rule 4 allows that) but
+      cannot submit without human review.
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: "browser.form.submit"
+
+  # ── Rule 4: Allow page reads, screenshots, and search ────────────────
+  # These are the core non-mutating browsing operations. Allow freely
+  # on allowlisted domains.
+  - id: allow-reads-and-search
+    name: "Allow page reads, screenshots, and search queries"
+    description: >
+      Reading page content, taking screenshots, and submitting search
+      queries are non-mutating and safe to allow autonomously.
+      These operations form the core of the browsing agent's workflow.
+    effect: allow
+    rateLimit:
+      # 200 reads per hour per agent prevents runaway scraping.
+      requests: 200
+      window: "1h"
+      scope: "principal"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "browser.read"
+        - field: action.type
+          operator: eq
+          value: "browser.screenshot"
+        - field: action.type
+          operator: eq
+          value: "search.query"
+        - field: action.type
+          operator: eq
+          value: "browser.extract"
+        - field: action.type
+          operator: eq
+          value: "browser.scroll"
+
+  # ── Rule 5: Allow navigation to allowlisted domains ───────────────────
+  # Navigation to explicitly approved domains is allowed.
+  # Domains not on this list are caught by rule 1 (block-unknown).
+  - id: allow-allowlisted-navigation
+    name: "Allow navigation to allowlisted domains"
+    description: >
+      The agent may navigate autonomously to the allowlisted domains
+      below. Navigation is rate-limited to prevent loops. Add domains
+      as trust is established through usage observation.
+    effect: allow
+    rateLimit:
+      # 100 navigations per hour is generous for most use cases.
+      # Lower this if your agent is running in a high-frequency loop.
+      requests: 100
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "browser.navigate"
+        - any:
+            - field: action.parameters.domain
+              operator: eq
+              value: "www.google.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "www.bing.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "duckduckgo.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "search.yahoo.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "en.wikipedia.org"
+            - field: action.parameters.domain
+              operator: eq
+              value: "docs.github.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "developer.mozilla.org"
+            - field: action.parameters.domain
+              operator: eq
+              value: "stackoverflow.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "news.ycombinator.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "www.bbc.com"
+            - field: action.parameters.domain
+              operator: eq
+              value: "reuters.com"
+
+  # ── Rule 6: Require approval for form fills containing PII fields ─────
+  # If the form being filled includes fields commonly used for PII
+  # (email, phone, name, address, SSN, credit card) the agent must
+  # get approval before proceeding, even just to fill (not submit).
+  - id: require-approval-pii-form-fill
+    name: "Require approval for PII form fills"
+    description: >
+      Form fills targeting PII fields (email, phone, name, address,
+      national ID, card number) require human approval. Prevents the
+      agent from being manipulated into submitting personal data to
+      unknown third-party forms.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "30m"
+      approvers:
+        - type: "role"
+          id: "agent-supervisor"
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "browser.form.fill"
+        - any:
+            - field: action.parameters.fieldName
+              operator: in
+              value:
+                - "email"
+                - "phone"
+                - "mobile"
+                - "name"
+                - "firstName"
+                - "lastName"
+                - "address"
+                - "streetAddress"
+                - "postcode"
+                - "zipCode"
+                - "ssn"
+                - "nationalId"
+                - "cardNumber"
+                - "creditCard"
+                - "password"
+                - "passport"
+
+  # ── Rule 7: Deny all other actions ────────────────────────────────────
+  # Anything not covered: network requests, script execution, plugin
+  # activation, etc. Browsing agents should not be making direct
+  # HTTP API calls or executing JavaScript outside these rules.
+  - id: deny-all-other
+    name: "Deny all other browser actions"
+    description: >
+      Explicit deny for any action type not covered by the rules above.
+      Browsing agents should only use the defined browser.* and search.*
+      action types. Anything else is unexpected and potentially unsafe.
+    effect: deny
+
+defaultEffect: deny
+
+metadata:
+  category: browsing
+  compliance: []
+  owner: "agent-platform-team"
+  tags:
+    - template
+    - browsing
+    - web-agent
+    - allowlist
+  notes: >
+    Update the domain allowlist in rules 'block-unknown-domain-navigation'
+    and 'allow-allowlisted-navigation' to match your agent's actual targets.
+    Both lists must be kept in sync. Consider using a separate policy for
+    authenticated browsing (session cookies, OAuth flows) that applies
+    additional restrictions.

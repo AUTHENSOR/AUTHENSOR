@@ -1,0 +1,518 @@
+# ============================================================
+# Authensor Policy Template: SaaS Integration Agent
+# ============================================================
+# Policy for an agent integrating with third-party SaaS APIs:
+# Stripe (payments), GitHub (code/issues), and Slack (messaging).
+#
+# Each provider has distinct risk characteristics:
+#
+#   Stripe — financial: strict budget limits, no refund automation,
+#            no subscription cancellation without approval
+#
+#   GitHub — code/data: allow PR/issue management, block repo deletion,
+#            block force-pushes to main, require approval for secrets
+#
+#   Slack  — communication: allow messages in approved channels,
+#            block DMs to external users, block channel creation
+#
+# The policy uses per-provider rate limits and per-resource budget
+# controls to enforce proportionate access.
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: saas-integration
+name: "SaaS Integration Agent (Stripe + GitHub + Slack)"
+version: "1.0.0"
+description: >
+  Policy for an agent integrating with Stripe, GitHub, and Slack.
+  Enforces per-provider budget limits, rate limits, and resource-level
+  access controls. High-value Stripe operations, destructive GitHub
+  operations, and external Slack communications require human approval.
+
+enabled: true
+priority: 10
+
+scope:
+  principalTypes:
+    - agent
+    - service
+  environments:
+    - production
+
+# ── Session-level controls ────────────────────────────────────────────
+sessionRules:
+  maxActionsPerSession: 300
+
+  # Detect patterns that suggest credential harvesting or exfiltration
+  forbiddenSequences:
+    - id: github-creds-to-external
+      sequence:
+        - "github.secrets.**"
+        - "http.post"
+      effect: deny
+      lookbackActions: 2
+      reason: >
+        GitHub secrets access followed by an outbound HTTP POST detected.
+        This is a credential exfiltration pattern. Denied.
+
+    - id: stripe-charge-loop
+      # Rapid-fire charge creation suggests a runaway billing loop.
+      sequence:
+        - "stripe.charges.create"
+        - "stripe.charges.create"
+        - "stripe.charges.create"
+      effect: require_approval
+      lookbackActions: 3
+      reason: >
+        Three consecutive Stripe charge creation actions detected.
+        Possible billing loop. Human review required.
+
+  sessionRiskThreshold:
+    maxScore: 80
+    effect: require_approval
+    riskWeights:
+      # Stripe — financial impact
+      "stripe.charges.create": 15
+      "stripe.refunds.create": 10
+      "stripe.subscriptions.cancel": 12
+      "stripe.subscriptions.update": 8
+      "stripe.customers.create": 5
+      "stripe.customers.update": 3
+      "stripe.**.read": 0
+      "stripe.**.list": 0
+      # GitHub — code impact
+      "github.repos.delete": 20
+      "github.refs.delete": 15         # branch deletion
+      "github.force_push": 15
+      "github.secrets.**": 10
+      "github.pull_requests.merge": 5
+      "github.issues.create": 2
+      "github.issues.close": 2
+      "github.**.read": 0
+      "github.**.list": 0
+      # Slack — communication impact
+      "slack.messages.post": 1
+      "slack.channels.create": 5
+      "slack.**.read": 0
+
+rules:
+
+  # ═══════════════════════════════════════════════════════════════════
+  # STRIPE RULES
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ── Stripe Rule 1: Block charges above per-action limit ───────────────
+  # Individual charge amounts are capped. An agent should never create
+  # a charge above $500 autonomously. Larger amounts require approval.
+  - id: block-large-stripe-charges
+    name: "Block Stripe charges above $500"
+    description: >
+      Deny any Stripe charge creation where the envelope's maxAmount
+      exceeds $500. Prevents accidental or malicious large charges.
+      Amounts between $100-$500 are rate-limited. Over $500 is denied;
+      use the require_approval rule path by submitting with maxAmount
+      explicitly set to the target amount to trigger approval.
+    effect: deny
+    constraints:
+      maxAmount: 500
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "stripe.charges.create"
+        - field: action.parameters.amount
+          operator: gt
+          value: 50000  # amount in cents: $500.00
+
+  # ── Stripe Rule 2: Require approval for refunds ───────────────────────
+  # Refunds have direct financial impact. All refund creation requires
+  # human approval regardless of amount.
+  - id: require-approval-stripe-refunds
+    name: "Require approval for all Stripe refunds"
+    description: >
+      Refunds reverse a completed payment and have direct financial
+      impact. All refund creation requires human approval. There is no
+      autonomous refund path. For partial refunds add the refund amount
+      as action.parameters.amount for the approver's reference.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "4h"
+      approvers:
+        - type: "role"
+          id: "finance-approver"
+    condition:
+      field: action.type
+      operator: startsWith
+      value: "stripe.refunds."
+
+  # ── Stripe Rule 3: Require approval for subscription cancellations ────
+  - id: require-approval-stripe-subscription-cancel
+    name: "Require approval for subscription cancellations"
+    description: >
+      Cancelling a subscription is an irreversible revenue impact.
+      Always requires human approval. The approver can see the customer
+      ID and subscription ID in the envelope for verification.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "4h"
+      approvers:
+        - type: "role"
+          id: "finance-approver"
+        - type: "role"
+          id: "customer-success-lead"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "stripe.subscriptions.cancel"
+        - all:
+            - field: action.type
+              operator: eq
+              value: "stripe.subscriptions.update"
+            - field: action.parameters.cancel_at_period_end
+              operator: eq
+              value: true
+
+  # ── Stripe Rule 4: Allow Stripe reads ─────────────────────────────────
+  - id: allow-stripe-reads
+    name: "Allow Stripe read operations"
+    description: >
+      Reading customer data, listing charges, retrieving invoices, and
+      other read operations are safe and allowed with a rate limit to
+      prevent API quota exhaustion.
+    effect: allow
+    rateLimit:
+      requests: 500
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "stripe."
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".retrieve"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+
+  # ── Stripe Rule 5: Allow standard Stripe writes with budget ──────────
+  # Customer creation, subscription creation, payment method updates.
+  - id: allow-stripe-standard-writes
+    name: "Allow standard Stripe write operations"
+    description: >
+      Customer creation, payment method updates, subscription creation
+      (not cancellation), and charge creation within the $500 limit
+      are allowed with rate limits and per-action cost tracking.
+    effect: allow
+    rateLimit:
+      requests: 50
+      window: "1h"
+      scope: "principal"
+    costBudget:
+      # Daily budget for Stripe API calls (approximate API cost, not
+      # the financial value of the transactions being created).
+      period: "daily"
+      maxBudget: 10.00
+      maxActionCost: 0.50
+      alertThresholds:
+        - 0.7
+        - 0.9
+        - 1.0
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "stripe."
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".create"
+            - field: action.type
+              operator: endsWith
+              value: ".update"
+            - field: action.type
+              operator: endsWith
+              value: ".attach"
+        # Not a refund (handled by rule 2)
+        - not:
+            field: action.type
+            operator: startsWith
+            value: "stripe.refunds."
+        # Not a cancellation (handled by rule 3)
+        - not:
+            field: action.type
+            operator: eq
+            value: "stripe.subscriptions.cancel"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # GITHUB RULES
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ── GitHub Rule 6: Block repository deletion ─────────────────────────
+  - id: block-github-repo-delete
+    name: "Block GitHub repository deletion"
+    description: >
+      Repository deletion is irreversible and catastrophic. No autonomous
+      or approval-based path exists — this is an unconditional deny.
+      Repository deletion must always be performed by a human directly.
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: "github.repos.delete"
+
+  # ── GitHub Rule 7: Block force pushes ────────────────────────────────
+  - id: block-github-force-push
+    name: "Block GitHub force pushes"
+    description: >
+      Force pushes rewrite history and can destroy work. Unconditionally
+      denied for all branches. Use standard pushes and pull requests.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "github.force_push"
+        - all:
+            - field: action.type
+              operator: eq
+              value: "github.refs.update"
+            - field: action.parameters.force
+              operator: eq
+              value: true
+
+  # ── GitHub Rule 8: Require approval for secrets access ───────────────
+  - id: require-approval-github-secrets
+    name: "Require approval for GitHub secrets access"
+    description: >
+      Reading or writing GitHub Actions secrets, environment secrets,
+      or repository secrets requires human approval. Secrets access
+      risks exposing credentials to the agent's context.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "1h"
+      approvers:
+        - type: "role"
+          id: "security-reviewer"
+    condition:
+      field: action.type
+      operator: startsWith
+      value: "github.secrets."
+
+  # ── GitHub Rule 9: Allow GitHub reads ────────────────────────────────
+  - id: allow-github-reads
+    name: "Allow GitHub read operations"
+    description: >
+      Reading issues, PRs, files, commits, and repository metadata
+      is safe and allowed. Rate-limited to 1000/hour to respect
+      GitHub's API rate limits.
+    effect: allow
+    rateLimit:
+      requests: 1000
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "github."
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".search"
+
+  # ── GitHub Rule 10: Allow GitHub issue and PR operations ──────────────
+  - id: allow-github-issue-pr-ops
+    name: "Allow GitHub issue and pull request operations"
+    description: >
+      Creating issues, adding labels, creating PRs, requesting reviews,
+      and updating PR descriptions are safe collaborative actions.
+      PR merges require the target branch to not be a protected branch
+      (checked via action.parameters.base not being 'main' or 'master').
+    effect: allow
+    rateLimit:
+      requests: 100
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "github."
+        - any:
+            - field: action.type
+              operator: startsWith
+              value: "github.issues."
+            - field: action.type
+              operator: startsWith
+              value: "github.pull_requests."
+            - field: action.type
+              operator: startsWith
+              value: "github.labels."
+            - field: action.type
+              operator: startsWith
+              value: "github.comments."
+        # Don't allow merging directly into protected branches autonomously
+        - not:
+            all:
+              - field: action.type
+                operator: eq
+                value: "github.pull_requests.merge"
+              - any:
+                  - field: action.parameters.base
+                    operator: eq
+                    value: "main"
+                  - field: action.parameters.base
+                    operator: eq
+                    value: "master"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SLACK RULES
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ── Slack Rule 11: Block messages to external/unknown channels ────────
+  - id: block-slack-external-channels
+    name: "Block Slack messages to external or unknown channels"
+    description: >
+      Slack messages may only be posted to the approved internal channel
+      list. Posting to external shared channels, DMs with external users,
+      or unknown channel IDs is blocked. Add channels to the allowlist
+      as needed.
+    effect: deny
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "slack.messages."
+        - not:
+            field: action.parameters.channelId
+            operator: in
+            value:
+              # Replace with your actual Slack channel IDs
+              - "C_GENERAL"         # #general
+              - "C_ALERTS"          # #alerts
+              - "C_AGENT_OUTPUT"    # #agent-output
+              - "C_DEPLOYMENTS"     # #deployments
+              - "C_INCIDENTS"       # #incidents
+
+  # ── Slack Rule 12: Block channel creation ────────────────────────────
+  - id: block-slack-channel-creation
+    name: "Block Slack channel creation"
+    description: >
+      Agents may not create new Slack channels. Channel creation is
+      an administrative action that should be performed by humans.
+    effect: deny
+    condition:
+      field: action.type
+      operator: eq
+      value: "slack.channels.create"
+
+  # ── Slack Rule 13: Allow Slack reads ─────────────────────────────────
+  - id: allow-slack-reads
+    name: "Allow Slack read operations"
+    description: >
+      Reading channel history, user profiles, and channel membership
+      is safe and allowed. Rate-limited to prevent bulk data extraction.
+    effect: allow
+    rateLimit:
+      requests: 200
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "slack."
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: endsWith
+              value: ".history"
+            - field: action.type
+              operator: endsWith
+              value: ".info"
+
+  # ── Slack Rule 14: Allow posting to approved channels ─────────────────
+  - id: allow-slack-messages-approved-channels
+    name: "Allow Slack messages to approved channels"
+    description: >
+      The agent may post messages to the approved internal channels.
+      Rate-limited to 60 messages per hour to prevent spam.
+    effect: allow
+    rateLimit:
+      requests: 60
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "slack.messages.post"
+        - field: action.parameters.channelId
+          operator: in
+          value:
+            - "C_GENERAL"
+            - "C_ALERTS"
+            - "C_AGENT_OUTPUT"
+            - "C_DEPLOYMENTS"
+            - "C_INCIDENTS"
+
+  # ── Rule 15: Deny all other actions ──────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    description: >
+      Deny anything not covered by the provider-specific rules above.
+      This includes direct HTTP calls, shell execution, file operations,
+      and any provider not listed. To add a new SaaS provider, add
+      rules before this catch-all.
+    effect: deny
+
+defaultEffect: deny
+
+metadata:
+  category: saas-integration
+  compliance:
+    - "PCI DSS (Stripe rules)"
+    - "SOC 2 Type II"
+  owner: "integrations-team"
+  tags:
+    - template
+    - saas
+    - stripe
+    - github
+    - slack
+    - budget
+    - rate-limit
+  notes: >
+    Replace the Slack channel IDs (C_GENERAL, C_ALERTS, etc.) with your
+    actual Slack channel IDs. Update the Stripe budget limits to match
+    your actual transaction volumes. The costBudget in rule
+    'allow-stripe-standard-writes' tracks API call cost, not the financial
+    value of Stripe transactions — set maxBudget based on your Stripe API
+    usage billing tier.

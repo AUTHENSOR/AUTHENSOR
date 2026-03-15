@@ -23,6 +23,7 @@ import { dashboardRoute } from './routes/dashboard.js';
 import { transparencyRoute } from './routes/transparency.js';
 import { shadowRoute } from './routes/shadow.js';
 import { budgetsRoute } from './routes/budgets.js';
+import { complianceRoute } from './routes/compliance.js';
 import { authMiddleware } from './auth/middleware.js';
 import { rateLimitMiddleware } from './middleware/rate_limit.js';
 import { bodyLimitMiddleware } from './middleware/body_limit.js';
@@ -88,6 +89,9 @@ export function createApp() {
 
   // Shadow/canary policy evaluation report: admin only
   app.route('/shadow', shadowRoute);
+
+  // Compliance assessment and audit export: admin only
+  app.route('/v1/compliance', complianceRoute);
 
   // Dashboard: admin only (HTMX-powered admin UI)
   app.route('/dashboard', dashboardRoute);
