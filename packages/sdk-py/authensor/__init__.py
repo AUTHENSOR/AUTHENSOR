@@ -4,26 +4,38 @@ Authensor Python SDK
 A Python SDK for integrating Authensor policy enforcement into your agents
 and applications.
 
-Example:
-    ```python
-    from authensor import Authensor
+Quickstart::
 
-    authensor = Authensor(
-        control_plane_url="http://localhost:3000",
+    from authensor import AuthensorClient, AuthensorGuard
+
+    client = AuthensorClient(
+        base_url="https://cp.authensor.dev",
+        api_key="sk-...",
         principal_id="my-agent",
     )
+    guard = AuthensorGuard(client, agent_id="my-agent")
 
-    # Execute an action with policy enforcement
-    result = await authensor.execute(
-        action_type="stripe.charges.create",
-        resource="stripe://customers/cus_123/charges",
-        executor=lambda: stripe.charges.create(amount=1000, currency="usd"),
-        constraints={"max_amount": 1000, "currency": "USD"},
-    )
-    ```
+    # Decorator style
+    @guard
+    async def send_payment(amount: int, currency: str) -> dict:
+        return await stripe.charges.create(amount=amount, currency=currency)
+
+    # Context manager style
+    async with guard.protect("db.write", "postgresql://db/users"):
+        await db.execute("INSERT INTO users ...")
 """
 
-from authensor.client import Authensor, AuthensorConfig
+from authensor.client import Authensor, AuthensorClient, AuthensorConfig
+from authensor.envelope import create_envelope
+from authensor.exceptions import (
+    AuthensorApprovalRequired,
+    AuthensorConnectionError,
+    AuthensorDenied,
+    AuthensorDeniedError,
+    AuthensorError,
+    AuthensorTimeoutError,
+)
+from authensor.guard import AuthensorGuard
 from authensor.models import (
     ActionEnvelope,
     ActionReceipt,
@@ -32,19 +44,30 @@ from authensor.models import (
     ExecuteResult,
     Policy,
 )
-from authensor.exceptions import AuthensorDeniedError, AuthensorError
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
+    # Clients
+    "AuthensorClient",
     "Authensor",
     "AuthensorConfig",
+    # Guard
+    "AuthensorGuard",
+    # Envelope factory
+    "create_envelope",
+    # Models
     "ActionEnvelope",
     "ActionReceipt",
     "Decision",
     "DecisionOutcome",
-    "Policy",
     "ExecuteResult",
+    "Policy",
+    # Exceptions
     "AuthensorError",
     "AuthensorDeniedError",
+    "AuthensorDenied",
+    "AuthensorApprovalRequired",
+    "AuthensorTimeoutError",
+    "AuthensorConnectionError",
 ]
