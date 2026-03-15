@@ -36,6 +36,30 @@ export type {
 export { ALL_SEEDS } from './seeds.js';
 export { RedTeamHarness, type HarnessOptions, type Provider } from './harness.js';
 
+export {
+  ASI01_TO_ASI05_SEEDS,
+  getPayloadsByCategory,
+  getPayloadsBySeverity,
+  getPayloadsByDetectionLayer,
+  getOwaspAsiSummary,
+  type OwaspAsiPayload,
+  type OwaspAsiCategory,
+  type DetectionLayer,
+  type SeverityLevel,
+} from './seeds-asi01-asi05.js';
+
+export {
+  ASI06_TO_ASI10_SEEDS,
+  getPayloadsByAsiCategory,
+  getPayloadsBySeverity as getAsi06To10PayloadsBySeverity,
+  getPayloadsByDetection,
+  getAsiCategorySummary,
+  type AsiAttackPayload,
+  type OWASPAsiCategory,
+  type DetectionSignal,
+  type Severity,
+} from './seeds-asi06-asi10.js';
+
 import { ALL_SEEDS } from './seeds.js';
 import type { RedTeamSeed, AttackCategory, SeedResult, RedTeamReport } from './types.js';
 

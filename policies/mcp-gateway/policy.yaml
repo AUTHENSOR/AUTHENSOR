@@ -1,0 +1,510 @@
+# ============================================================
+# Authensor Policy Template: MCP Gateway
+# ============================================================
+# Policy for the Authensor MCP Server acting as a gateway that
+# governs which MCP tools can be called by AI agents.
+#
+# The MCP (Model Context Protocol) gateway sits between an AI
+# model (Claude, GPT, etc.) and the tools it can invoke. This
+# policy controls:
+#   - Which tool categories are completely blocked
+#   - Which operations require human approval
+#   - Which operations are safe for autonomous use
+#
+# MCP action types follow the convention:
+#   mcp.<server-name>.<tool-name>
+#   e.g., mcp.filesystem.read_file
+#        mcp.github.create_issue
+#        mcp.bash.execute
+#
+# Tool categories (used in conditions):
+#   - shell_exec   — bash, sh, cmd, powershell execution
+#   - file_delete  — file/directory deletion
+#   - network_admin — network configuration changes
+#   - write        — any state mutation (file write, DB write, API POST)
+#   - read         — read-only operations
+#   - search       — search and discovery operations
+#   - list         — list/enumerate operations
+
+id: mcp-gateway-v1
+name: "MCP Gateway Policy"
+version: "1.0.0"
+description: >
+  Gateway policy for the Authensor MCP Server. Blocks dangerous
+  tool categories (shell execution, file deletion, network admin).
+  Requires approval for write operations, external API calls, and
+  data exports. Allows read, search, and list operations freely.
+
+enabled: true
+
+# MCP gateway policy runs at highest priority — it's the outer
+# security boundary for all tool invocations.
+priority: 1000
+
+scope:
+  # MCP gateway applies to all agent and service principals
+  principalTypes:
+    - agent
+    - service
+  environments:
+    - development
+    - staging
+    - production
+
+rules:
+
+  # ── Rule 1: Hard block — shell execution ──────────────────────────
+  # Shell/bash execution is the highest-risk MCP tool category.
+  # An agent with shell access can do anything the host OS allows.
+  # Hard-blocked with no approval path.
+  - id: deny-shell-execution
+    name: "Block all shell and command execution"
+    description: >
+      Deny any MCP tool that executes shell commands, bash scripts,
+      or system commands. Shell execution provides uncontrolled
+      access to the host system and cannot be safely scoped.
+      This includes bash, sh, cmd, powershell, and similar tools.
+    effect: deny
+    condition:
+      any:
+        # Direct shell tool names
+        - field: action.type
+          operator: matches
+          value: "^mcp\\.(bash|shell|sh|cmd|powershell)\\..*$"
+        - field: action.type
+          operator: contains
+          value: "shell_exec"
+        - field: action.type
+          operator: contains
+          value: "execute_command"
+        - field: action.type
+          operator: contains
+          value: "run_command"
+        - field: action.type
+          operator: contains
+          value: "bash"
+        # Context flag set by the MCP server for shell-category tools
+        - field: context.toolCategory
+          operator: eq
+          value: "shell_exec"
+
+  # ── Rule 2: Hard block — file deletion ────────────────────────────
+  # File deletion is irreversible. No MCP tool may delete files
+  # or directories without a separate backup/restore workflow.
+  - id: deny-file-deletion
+    name: "Block file and directory deletion"
+    description: >
+      Deny MCP tools that delete files or directories. File
+      deletion is irreversible and must never be done autonomously.
+      Use a trash/archive workflow instead.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: matches
+          value: "^mcp\\.filesystem\\.(delete|remove|unlink|rmdir).*$"
+        - field: action.type
+          operator: contains
+          value: "file_delete"
+        - field: action.type
+          operator: contains
+          value: "delete_file"
+        - field: action.type
+          operator: contains
+          value: "remove_file"
+        - field: context.toolCategory
+          operator: eq
+          value: "file_delete"
+
+  # ── Rule 3: Hard block — network administration ───────────────────
+  # Network configuration changes (firewall rules, DNS changes,
+  # routing table updates, VPN config) are hard-blocked.
+  - id: deny-network-admin
+    name: "Block network administration tools"
+    description: >
+      Deny MCP tools that modify network configuration: firewall
+      rules, DNS records, routing tables, load balancer config,
+      VPN settings, or network interface management.
+    effect: deny
+    condition:
+      any:
+        - field: context.toolCategory
+          operator: eq
+          value: "network_admin"
+        - field: action.type
+          operator: matches
+          value: "^mcp\\.(firewall|dns|routing|network)\\.(create|update|delete|modify).*$"
+        - all:
+            - field: action.type
+              operator: startsWith
+              value: "mcp."
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "firewall"
+                - field: action.type
+                  operator: contains
+                  value: "iptables"
+                - field: action.type
+                  operator: contains
+                  value: "dns_record"
+
+  # ── Rule 4: Hard block — credential and secrets tools ─────────────
+  # MCP tools that access secrets managers, vaults, or credential
+  # stores are completely blocked.
+  - id: deny-secrets-tools
+    name: "Block secrets and credential management tools"
+    description: >
+      Deny MCP tools that read or write to secrets managers,
+      credential vaults, or key stores. This includes AWS Secrets
+      Manager, HashiCorp Vault, 1Password, and similar tools.
+    effect: deny
+    condition:
+      any:
+        - field: context.toolCategory
+          operator: eq
+          value: "secrets"
+        - field: action.type
+          operator: matches
+          value: "^mcp\\.(vault|secrets_manager|keychain)\\.(read|get|list).*$"
+        - all:
+            - field: action.type
+              operator: startsWith
+              value: "mcp."
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "secret"
+                - field: action.type
+                  operator: contains
+                  value: "credential"
+                - field: action.type
+                  operator: contains
+                  value: "private_key"
+
+  # ── Rule 5: Require approval — write operations ───────────────────
+  # Write operations mutate state. Any MCP tool call that creates,
+  # updates, or overwrites data requires a human to confirm.
+  - id: require-approval-write-operations
+    name: "Require approval for write operations"
+    description: >
+      Any MCP tool that creates, updates, overwrites, or appends
+      data requires human approval. This includes file writes,
+      database mutations, API POST/PUT/PATCH calls, and any
+      action with a create/update/write verb.
+    effect: require_approval
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "mcp."
+        - any:
+            - field: context.toolCategory
+              operator: eq
+              value: "write"
+            - field: action.type
+              operator: contains
+              value: "write"
+            - field: action.type
+              operator: contains
+              value: "create"
+            - field: action.type
+              operator: contains
+              value: "update"
+            - field: action.type
+              operator: contains
+              value: "append"
+            - field: action.type
+              operator: contains
+              value: "overwrite"
+            - field: action.type
+              operator: contains
+              value: "insert"
+        # Not already caught by harder rules above
+        - not:
+            any:
+              - field: context.toolCategory
+                operator: eq
+                value: "shell_exec"
+              - field: context.toolCategory
+                operator: eq
+                value: "file_delete"
+    approvalConfig:
+      expiresIn: "30m"
+      requiredApprovals: 1
+      approvers:
+        - type: principal
+          id: "owner"
+
+  # ── Rule 6: Require approval — external API calls ─────────────────
+  # MCP tools that make outbound HTTP calls or interact with
+  # external services require approval to prevent data exfiltration
+  # and unauthorized API usage.
+  - id: require-approval-external-api
+    name: "Require approval for external API calls"
+    description: >
+      MCP tools that make outbound calls to external APIs (Stripe,
+      Twilio, SendGrid, OpenAI, etc.) require approval before
+      execution. External API calls have cost, rate limit, and
+      data privacy implications.
+    effect: require_approval
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "mcp."
+        - any:
+            - field: context.toolCategory
+              operator: eq
+              value: "external_api"
+            - field: context.isExternalCall
+              operator: eq
+              value: true
+            - field: action.type
+              operator: matches
+              value: "^mcp\\.(stripe|twilio|sendgrid|openai|anthropic|slack|github|jira)\\.(create|post|send|submit).*$"
+    approvalConfig:
+      expiresIn: "15m"
+      requiredApprovals: 1
+      approvers:
+        - type: principal
+          id: "owner"
+
+  # ── Rule 7: Require approval — data exports ───────────────────────
+  - id: require-approval-data-exports
+    name: "Require approval for data exports"
+    description: >
+      MCP tools that export, download, or exfiltrate data in bulk
+      require approval. This covers database dumps, file archive
+      downloads, and any tool that produces a large data artifact.
+    effect: require_approval
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "mcp."
+        - any:
+            - field: context.toolCategory
+              operator: eq
+              value: "export"
+            - field: action.type
+              operator: contains
+              value: "export"
+            - field: action.type
+              operator: contains
+              value: "dump"
+            - field: action.type
+              operator: contains
+              value: "download"
+            - field: action.type
+              operator: contains
+              value: "backup"
+    approvalConfig:
+      expiresIn: "1h"
+      requiredApprovals: 1
+      approvers:
+        - type: principal
+          id: "owner"
+
+  # ── Rule 8: Allow MCP read operations ────────────────────────────
+  # Read operations are safe for autonomous use. Rate-limited
+  # to prevent excessive API calls.
+  - id: allow-mcp-reads
+    name: "Allow MCP read operations"
+    description: >
+      Permit all MCP tool calls that perform read operations:
+      file reads, database queries, API GET calls, and any
+      action with a read/get/view verb. Rate-limited to 500
+      calls per hour per agent.
+    effect: allow
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "mcp."
+        - any:
+            - field: context.toolCategory
+              operator: eq
+              value: "read"
+            - field: action.type
+              operator: contains
+              value: "read"
+            - field: action.type
+              operator: contains
+              value: "get"
+            - field: action.type
+              operator: contains
+              value: "fetch"
+            - field: action.type
+              operator: contains
+              value: "view"
+            - field: action.type
+              operator: contains
+              value: "show"
+            - field: action.type
+              operator: contains
+              value: "describe"
+    rateLimit:
+      requests: 500
+      window: "1h"
+      scope: principal
+
+  # ── Rule 9: Allow MCP search operations ──────────────────────────
+  - id: allow-mcp-searches
+    name: "Allow MCP search operations"
+    description: >
+      Permit all MCP tool calls that perform search operations:
+      semantic search, keyword search, fuzzy search, and similar
+      discovery operations.
+    effect: allow
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "mcp."
+        - any:
+            - field: context.toolCategory
+              operator: eq
+              value: "search"
+            - field: action.type
+              operator: contains
+              value: "search"
+            - field: action.type
+              operator: contains
+              value: "find"
+            - field: action.type
+              operator: contains
+              value: "query"
+            - field: action.type
+              operator: contains
+              value: "lookup"
+    rateLimit:
+      requests: 300
+      window: "1h"
+      scope: principal
+
+  # ── Rule 10: Allow MCP list operations ───────────────────────────
+  - id: allow-mcp-lists
+    name: "Allow MCP list and enumerate operations"
+    description: >
+      Permit all MCP tool calls that list or enumerate resources:
+      directory listings, resource inventories, and paginated
+      collection reads.
+    effect: allow
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "mcp."
+        - any:
+            - field: context.toolCategory
+              operator: eq
+              value: "list"
+            - field: action.type
+              operator: contains
+              value: "list"
+            - field: action.type
+              operator: contains
+              value: "ls"
+            - field: action.type
+              operator: contains
+              value: "enumerate"
+            - field: action.type
+              operator: contains
+              value: "index"
+    rateLimit:
+      requests: 200
+      window: "1h"
+      scope: principal
+
+  # ── Rule 11: Deny all non-MCP actions ────────────────────────────
+  # This policy is scoped to MCP tool calls. Non-MCP actions
+  # fall through to the default deny, keeping this policy focused.
+  - id: deny-non-mcp-actions
+    name: "Deny non-MCP actions (out of scope for this policy)"
+    description: >
+      This policy governs MCP tool calls specifically. Any action
+      that does not start with 'mcp.' is outside this policy's
+      scope and is denied. Deploy a separate policy for non-MCP
+      actions.
+    effect: deny
+    condition:
+      not:
+        field: action.type
+        operator: startsWith
+        value: "mcp."
+
+  # ── Rule 12: Deny all other MCP actions ───────────────────────────
+  - id: deny-all-other-mcp
+    name: "Deny all other MCP tool calls"
+    description: >
+      Deny any MCP tool call not explicitly covered above.
+      Fail-closed ensures unknown tools cannot be invoked without
+      an explicit policy allowance.
+    effect: deny
+
+# Session-level protection for MCP tool usage.
+sessionRules:
+  # Cap MCP tool calls per agent session. An agent calling
+  # hundreds of MCP tools in one session warrants review.
+  maxActionsPerSession: 200
+
+  # Detect reconnaissance pattern: listing resources followed
+  # by bulk reads followed by an export — classic exfiltration.
+  forbiddenSequences:
+    - id: recon-then-exfiltration
+      name: "List then bulk read then export"
+      sequence:
+        - "mcp.*.list"
+        - "mcp.*.read"
+        - "mcp.*.export"
+      effect: require_approval
+      reason: >
+        Listing resources, reading them, then exporting matches
+        a data reconnaissance and exfiltration pattern.
+      lookbackActions: 10
+
+    - id: shell-via-tool-chaining
+      name: "Multiple tool calls that approximate shell execution"
+      sequence:
+        - "mcp.filesystem.write_file"
+        - "mcp.*.execute"
+      effect: deny
+      reason: >
+        Writing a file then executing it approximates shell execution.
+        Denied regardless of individual tool permissions.
+      lookbackActions: 3
+
+  sessionRiskThreshold:
+    maxScore: 60
+    effect: require_approval
+    riskWeights:
+      "mcp.*.write": 10
+      "mcp.*.create": 10
+      "mcp.*.update": 8
+      "mcp.*.delete": 20
+      "mcp.*.export": 15
+      "mcp.*.execute": 25
+      "mcp.*.read": 1
+      "mcp.*.list": 1
+      "mcp.*.search": 1
+
+defaultEffect: deny
+
+metadata:
+  category: mcp-gateway
+  compliance:
+    - SOC2-CC6
+  owner: "platform-security"
+  reviewCycle: "monthly"
+  tags:
+    - template
+    - mcp
+    - gateway
+    - tool-use
+    - agent-safety
+  notes: >
+    The 'context.toolCategory' field is expected to be set by the
+    Authensor MCP Server based on the tool's declared category in
+    its manifest. If your MCP server does not set this, rely on
+    the action.type pattern matching instead.

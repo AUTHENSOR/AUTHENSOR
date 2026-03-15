@@ -1,0 +1,323 @@
+# ============================================================
+# Authensor Policy Template: Multi-Agent Orchestrator
+# ============================================================
+# Policy for an orchestrator agent that delegates tasks to
+# sub-agents. The orchestrator receives a high-level goal and
+# decomposes it into subtasks, dispatching each to a specialised
+# sub-agent via delegation actions.
+#
+# The key risks in multi-agent systems are:
+#   1. Unbounded delegation depth (stack overflow / infinite loops)
+#   2. Fan-out explosion (spawning too many sub-agents at once)
+#   3. Privilege escalation (delegating to a higher-privilege agent)
+#   4. Confused deputy attacks (sub-agent acts on behalf of orchestrator)
+#   5. Missing audit trail (no parentReceiptId = broken chain of custody)
+#
+# Design:
+#   - Block: delegation depth > 3, fan-out > 5
+#   - Require approval: delegation to higher-privilege agents
+#   - Allow: same or lower privilege delegation with valid parentReceiptId
+#   - Require: parentReceiptId on all delegation envelopes
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: multi-agent-orchestrator
+name: "Multi-Agent Orchestrator Policy"
+version: "1.0.0"
+description: >
+  Policy for an orchestrator agent delegating tasks to sub-agents.
+  Blocks deep delegation chains (>3 levels) and wide fan-outs (>5
+  concurrent sub-agents). Requires approval before delegating to an
+  agent with higher privilege than the orchestrator. All delegations
+  must carry a parentReceiptId to maintain audit trail continuity.
+  Allows same-privilege or lower-privilege delegation freely.
+
+enabled: true
+priority: 20
+
+scope:
+  principalTypes:
+    - agent
+  # Orchestrators can run in all environments. In development you
+  # may want to lower the depth/fan-out limits for safety.
+  environments:
+    - development
+    - staging
+    - production
+
+# ── Session-level controls ────────────────────────────────────────────
+# Multi-agent systems can amplify errors through delegation chains.
+# Session rules bound the total complexity of a single orchestration run.
+sessionRules:
+  # Hard cap on total actions per orchestration session.
+  # Includes delegations + any direct actions the orchestrator takes.
+  maxActionsPerSession: 200
+
+  # Detect runaway delegation: if the orchestrator delegates more than
+  # 5 times in quick succession without interleaved non-delegation
+  # actions, it may be stuck in a retry loop.
+  forbiddenSequences:
+    - id: delegation-storm
+      # Five consecutive delegations without any non-delegation action.
+      # This pattern suggests a retry loop or a malfunctioning planner.
+      sequence:
+        - "agent.delegate"
+        - "agent.delegate"
+        - "agent.delegate"
+        - "agent.delegate"
+        - "agent.delegate"
+      effect: require_approval
+      lookbackActions: 5
+      reason: >
+        Five consecutive delegation actions detected without interleaved
+        non-delegation work. This may indicate a planning loop or runaway
+        delegation storm. Human review required before further delegation.
+
+    - id: escalation-then-delegate
+      # Escalation followed immediately by delegation is suspicious:
+      # the orchestrator may be trying to launder elevated permissions
+      # through a sub-agent.
+      sequence:
+        - "auth.escalate"
+        - "agent.delegate"
+      effect: deny
+      lookbackActions: 2
+      reason: >
+        Privilege escalation followed immediately by agent delegation
+        detected. This pattern may indicate an attempt to launder
+        elevated permissions through a sub-agent. Delegation denied.
+
+  # Risk threshold: delegation carries moderate risk, result synthesis
+  # is free, and tool calls carry risk proportional to their effect.
+  sessionRiskThreshold:
+    maxScore: 100
+    effect: require_approval
+    riskWeights:
+      "agent.delegate": 5           # each delegation has a cost
+      "agent.spawn": 8              # spawning a new agent is higher risk
+      "agent.broadcast": 15         # broadcasting to all sub-agents is high risk
+      "tool.execute": 3             # direct tool calls carry moderate risk
+      "data.write": 4
+      "data.delete": 8
+      "agent.terminate": 2          # terminating a sub-agent is low risk
+      "agent.status": 0             # status checks are free
+      "result.aggregate": 0         # synthesising results is free
+
+rules:
+
+  # ── Rule 1: Block delegations missing parentReceiptId ─────────────────
+  # Every delegation must reference the orchestrator's own receipt ID.
+  # This ensures an unbroken chain of custody in the audit trail.
+  # A delegation without parentReceiptId cannot be attributed to the
+  # originating task and is therefore denied.
+  - id: block-delegation-missing-parent-receipt
+    name: "Block delegations without parentReceiptId"
+    description: >
+      All agent delegation actions must carry a parentReceiptId in
+      the envelope context. This links the delegation to the orchestrator's
+      own receipt, maintaining the cryptographic audit trail. Delegations
+      without a parentReceiptId cannot be attributed and are denied.
+    effect: deny
+    constraints:
+      requireConstraints:
+        - "parentReceiptId"
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: eq
+              value: "agent.delegate"
+            - field: action.type
+              operator: startsWith
+              value: "agent."
+        - not:
+            field: context.parentReceiptId
+            operator: exists
+
+  # ── Rule 2: Block delegation chains deeper than 3 ─────────────────────
+  # Depth is tracked in the envelope context as `delegationDepth`.
+  # The orchestrator is depth 0; its sub-agents are depth 1;
+  # sub-sub-agents are depth 2; beyond 3 is denied.
+  #
+  # A depth > 3 is almost never legitimate and makes audit trails
+  # exponentially harder to follow.
+  - id: block-deep-delegation-chains
+    name: "Block delegation chains deeper than 3 levels"
+    description: >
+      Delegation chains deeper than 3 levels (orchestrator → L1 → L2 → L3)
+      are denied. Deep chains are hard to audit, hard to reason about, and
+      typically indicate a design problem in the agent architecture rather
+      than a legitimate use case. Refactor to flatter delegation trees.
+    effect: deny
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "agent."
+        - field: context.delegationDepth
+          operator: gt
+          value: 3
+
+  # ── Rule 3: Block fan-out greater than 5 concurrent sub-agents ────────
+  # Fan-out is tracked in the envelope context as `currentFanOut`.
+  # Spawning more than 5 concurrent sub-agents makes it difficult to
+  # manage, monitor, and roll back the orchestration safely.
+  - id: block-excessive-fan-out
+    name: "Block fan-out greater than 5 concurrent sub-agents"
+    description: >
+      The orchestrator may not have more than 5 active sub-agents
+      at any one time. Fan-out beyond this limit creates coordination
+      overhead, makes the blast radius of failures larger, and degrades
+      the quality of human oversight. Reduce by using sequential subtasks
+      or grouping related work into fewer, larger sub-agent tasks.
+    effect: deny
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "agent.spawn"
+        - field: context.currentFanOut
+          operator: gte
+          value: 5
+
+  # ── Rule 4: Require approval for higher-privilege delegation ──────────
+  # Privilege levels: admin > operator > executor > reader
+  # An orchestrator with operator privilege may not delegate to an
+  # admin agent without explicit human approval. Prevents privilege
+  # laundering through the delegation chain.
+  - id: require-approval-privilege-escalation-delegation
+    name: "Require approval for delegation to higher-privilege agents"
+    description: >
+      Delegation to an agent with a higher privilege level than the
+      orchestrator requires human approval. Privilege levels are
+      encoded as integers in context.principalPrivilegeLevel (1=reader,
+      2=executor, 3=operator, 4=admin). If the target agent's privilege
+      level exceeds the orchestrator's level, approval is required.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "2h"
+      approvers:
+        - type: "role"
+          id: "orchestration-supervisor"
+        - type: "role"
+          id: "security-reviewer"
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "agent.delegate"
+        # Target agent privilege level exceeds orchestrator privilege level
+        - field: action.parameters.targetPrivilegeLevel
+          operator: gt
+          value: 2  # Replace with dynamic lookup: context.principalPrivilegeLevel
+
+  # ── Rule 5: Allow same-privilege or lower-privilege delegation ────────
+  # The safe case: delegating to an agent with equal or lesser privilege.
+  # This is allowed freely, subject to the depth and fan-out limits above.
+  - id: allow-same-or-lower-privilege-delegation
+    name: "Allow delegation to same or lower privilege agents"
+    description: >
+      Delegating to an agent with equal or lesser privilege is safe
+      and allowed autonomously, provided the delegation carries a
+      parentReceiptId (enforced by rule 1) and depth/fan-out limits
+      are respected (enforced by rules 2 and 3).
+    effect: allow
+    rateLimit:
+      # Max 50 delegations per hour per orchestrator to prevent storms.
+      requests: 50
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "agent.delegate"
+        - field: context.parentReceiptId
+          operator: exists
+        # Target privilege <= orchestrator privilege
+        - field: action.parameters.targetPrivilegeLevel
+          operator: lte
+          value: 2  # Replace with dynamic lookup: context.principalPrivilegeLevel
+
+  # ── Rule 6: Allow result aggregation and status checks ───────────────
+  # The orchestrator's core non-delegation work: collecting results
+  # from sub-agents and synthesising them into a final response.
+  - id: allow-orchestrator-reads
+    name: "Allow result aggregation, status checks, and synthesis"
+    description: >
+      The orchestrator may freely read sub-agent status, collect results,
+      aggregate data, and synthesise the final output. These are
+      non-mutating coordination operations.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "agent.status"
+        - field: action.type
+          operator: eq
+          value: "agent.collect"
+        - field: action.type
+          operator: eq
+          value: "result.aggregate"
+        - field: action.type
+          operator: eq
+          value: "result.synthesise"
+        - field: action.type
+          operator: eq
+          value: "agent.terminate"
+
+  # ── Rule 7: Allow agent spawning within fan-out limits ────────────────
+  # Spawning up to 5 sub-agents is allowed. Beyond 5 is blocked by
+  # rule 3. This rule handles the allow case.
+  - id: allow-spawn-within-limits
+    name: "Allow sub-agent spawning within fan-out limits"
+    description: >
+      The orchestrator may spawn sub-agents when currentFanOut < 5.
+      Sub-agent spawning must carry a parentReceiptId (enforced by rule 1)
+      and must not exceed the delegation depth limit (enforced by rule 2).
+    effect: allow
+    condition:
+      all:
+        - field: action.type
+          operator: eq
+          value: "agent.spawn"
+        - field: context.parentReceiptId
+          operator: exists
+        - field: context.currentFanOut
+          operator: lt
+          value: 5
+
+  # ── Rule 8: Deny all other actions ────────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    description: >
+      Orchestrators should only use agent.* and result.* action types.
+      Direct tool use, shell execution, data mutations, and other actions
+      outside the orchestration vocabulary are denied. Use sub-agents for
+      all non-orchestration work.
+    effect: deny
+
+defaultEffect: deny
+
+metadata:
+  category: multi-agent
+  compliance:
+    - "NIST AI RMF"
+    - "MITRE ATLAS"
+  owner: "agent-platform-team"
+  tags:
+    - template
+    - multi-agent
+    - orchestrator
+    - delegation
+    - audit-trail
+  notes: >
+    The privilege level checks in rules 4 and 5 use a static value (2)
+    as a placeholder. In production, the orchestrator's privilege level
+    should be injected into context.principalPrivilegeLevel by the
+    control plane at envelope submission time, and the rule conditions
+    updated to compare against that dynamic value.
+    The delegationDepth and currentFanOut values must be tracked and
+    injected by the orchestration framework, not the agent itself.

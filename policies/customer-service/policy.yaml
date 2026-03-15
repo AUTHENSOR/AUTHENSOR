@@ -1,0 +1,421 @@
+# ============================================================
+# Authensor Policy Template: Customer Service
+# ============================================================
+# Policy for customer-facing AI support agents. Designed to
+# protect customers from accidental account changes, unauthorized
+# refunds, and PII disclosure while enabling fast resolution
+# of common support requests.
+#
+# Design goals:
+#   - Agents can resolve 80% of tickets autonomously
+#   - High-risk actions (refunds, account changes) route to human
+#   - PII disclosure and destructive operations are hard-blocked
+#   - Session limit prevents agents from taking too many actions
+#     in a single conversation
+
+id: customer-service-v1
+name: "Customer Service Agent"
+version: "1.0.0"
+description: >
+  Policy for customer-facing support agents. Allows ticket lookups,
+  FAQ responses, and order status checks autonomously. Requires
+  approval for refunds above $100 and account modifications.
+  Hard-blocks refunds above $500, account deletion, and PII
+  disclosure. Limits sessions to 50 actions.
+
+enabled: true
+priority: 50
+
+scope:
+  principalTypes:
+    - agent
+  environments:
+    - production
+    - staging
+
+rules:
+
+  # ── Rule 1: Hard block — refunds above $500 ───────────────────────
+  # Refunds above $500 cannot be issued by the agent regardless
+  # of context. This prevents runaway refund issuance and limits
+  # financial exposure per conversation.
+  - id: deny-large-refunds
+    name: "Block refunds above $500"
+    description: >
+      Deny any refund action where constraints.maxAmount exceeds
+      $500. Large refunds must be handled by human agents.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "refund"
+            - field: action.type
+              operator: contains
+              value: "chargeback"
+            - field: action.type
+              operator: contains
+              value: "reimbursement"
+        - field: constraints.maxAmount
+          operator: gt
+          value: 500
+
+  # ── Rule 2: Hard block — account deletion ─────────────────────────
+  # Account deletion is an irreversible action. The agent may never
+  # delete an account — this must always go through a human with a
+  # verified retention workflow.
+  - id: deny-account-deletion
+    name: "Block account deletion"
+    description: >
+      Deny all account deletion requests. Account closure and
+      deletion are irreversible and must be handled by a human
+      agent following the account retention workflow.
+    effect: deny
+    condition:
+      any:
+        - all:
+            - field: action.type
+              operator: contains
+              value: "account"
+            - field: action.type
+              operator: contains
+              value: "delete"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "account"
+            - field: action.type
+              operator: contains
+              value: "close"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.account\\.destroy$"
+
+  # ── Rule 3: Hard block — PII disclosure ───────────────────────────
+  # The agent must never output raw PII (full credit card numbers,
+  # SSNs, passwords) in its responses. This is enforced by blocking
+  # any action whose type or resource indicates PII retrieval for
+  # external rendering.
+  - id: deny-pii-disclosure
+    name: "Block PII disclosure actions"
+    description: >
+      Deny actions that would disclose PII to the customer channel:
+      full payment card reads, SSN lookups, password reveals, or
+      any action tagged with context.piiDisclosure = true.
+      Use masked/tokenized views instead.
+    effect: deny
+    condition:
+      any:
+        - field: context.piiDisclosure
+          operator: eq
+          value: true
+        - field: action.type
+          operator: contains
+          value: "ssn"
+        - field: action.type
+          operator: contains
+          value: "password.reveal"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "payment"
+            - field: action.type
+              operator: contains
+              value: "raw"
+
+  # ── Rule 4: Require approval — refunds $100–$500 ──────────────────
+  # Refunds in this range are possible but require a team lead or
+  # billing specialist to approve before issuance.
+  - id: require-approval-medium-refunds
+    name: "Require approval for refunds $100–$500"
+    description: >
+      Refund actions between $100 and $500 require one approver
+      from the billing team. Approval expires in 10 minutes to
+      keep the customer experience fast.
+    effect: require_approval
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "refund"
+            - field: action.type
+              operator: contains
+              value: "reimbursement"
+        - field: constraints.maxAmount
+          operator: gte
+          value: 100
+        - field: constraints.maxAmount
+          operator: lte
+          value: 500
+    approvalConfig:
+      expiresIn: "10m"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "billing-team-lead"
+
+  # ── Rule 5: Require approval — account modifications ──────────────
+  # Changing account details (email, address, subscription plan,
+  # payment method) requires approval to prevent account takeover
+  # via social engineering.
+  - id: require-approval-account-modifications
+    name: "Require approval for account modifications"
+    description: >
+      Account modifications (email change, address update, plan
+      change, payment method update) require team lead approval.
+      This is a key social engineering defense.
+    effect: require_approval
+    condition:
+      any:
+        - all:
+            - field: action.type
+              operator: contains
+              value: "account"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "update"
+                - field: action.type
+                  operator: contains
+                  value: "modify"
+                - field: action.type
+                  operator: contains
+                  value: "change"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "subscription"
+            - any:
+                - field: action.type
+                  operator: contains
+                  value: "upgrade"
+                - field: action.type
+                  operator: contains
+                  value: "downgrade"
+                - field: action.type
+                  operator: contains
+                  value: "cancel"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.(email|address|payment_method)\\.update$"
+    approvalConfig:
+      expiresIn: "15m"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "customer-service-supervisor"
+
+  # ── Rule 6: Allow ticket lookups ──────────────────────────────────
+  - id: allow-ticket-lookup
+    name: "Allow support ticket lookups"
+    description: >
+      Permit the agent to read and search the ticketing system.
+      Rate-limited to 200 requests per hour per agent to prevent
+      bulk data extraction.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".search"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "tickets"
+            - field: action.resource
+              operator: contains
+              value: "helpdesk"
+            - field: action.resource
+              operator: contains
+              value: "support"
+    rateLimit:
+      requests: 200
+      window: "1h"
+      scope: principal
+
+  # ── Rule 7: Allow FAQ and knowledge base responses ─────────────────
+  - id: allow-faq-responses
+    name: "Allow FAQ and knowledge base lookups"
+    description: >
+      Permit reads from the FAQ database, help center articles,
+      and product documentation. These are non-sensitive and
+      should be available without restriction.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".search"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "faq"
+            - field: action.resource
+              operator: contains
+              value: "knowledge-base"
+            - field: action.resource
+              operator: contains
+              value: "help-center"
+            - field: action.resource
+              operator: contains
+              value: "documentation"
+
+  # ── Rule 8: Allow order status checks ────────────────────────────
+  - id: allow-order-status
+    name: "Allow order status and tracking lookups"
+    description: >
+      Permit the agent to look up order status, shipping tracking,
+      and delivery estimates. These are read-only and safe.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".track"
+            - field: action.type
+              operator: endsWith
+              value: ".status"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "orders"
+            - field: action.resource
+              operator: contains
+              value: "shipments"
+            - field: action.resource
+              operator: contains
+              value: "tracking"
+            - field: action.resource
+              operator: contains
+              value: "deliveries"
+
+  # ── Rule 9: Allow small refunds without approval ──────────────────
+  # Refunds under $100 can be issued autonomously. This covers
+  # most routine refund requests (damaged items, shipping errors).
+  - id: allow-small-refunds
+    name: "Allow refunds under $100"
+    description: >
+      Permit refund actions where constraints.maxAmount is below
+      $100. These cover routine courtesy refunds, shipping credits,
+      and minor dispute resolutions.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "refund"
+            - field: action.type
+              operator: contains
+              value: "credit"
+        - field: constraints.maxAmount
+          operator: lt
+          value: 100
+    # Track daily refund spend across all agents
+    costBudget:
+      period: "daily"
+      maxBudget: 5000
+      maxActionCost: 100
+      alertThresholds: [0.75, 0.9, 1.0]
+
+  # ── Rule 10: Allow ticket creation and updates ────────────────────
+  - id: allow-ticket-mutations
+    name: "Allow ticket creation and status updates"
+    description: >
+      The agent may create, update, and close support tickets.
+      It may not delete tickets (deletion is a separate action
+      not covered here and falls through to the default deny).
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "ticket"
+            - field: action.type
+              operator: contains
+              value: "case"
+        - any:
+            - field: action.type
+              operator: contains
+              value: "create"
+            - field: action.type
+              operator: contains
+              value: "update"
+            - field: action.type
+              operator: contains
+              value: "close"
+            - field: action.type
+              operator: contains
+              value: "reopen"
+            - field: action.type
+              operator: contains
+              value: "comment"
+
+  # ── Rule 11: Deny everything else ─────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    effect: deny
+
+# Session rules prevent agents from taking too many actions
+# in a single customer conversation.
+sessionRules:
+  # A support agent should not need more than 50 actions per
+  # conversation. If this limit is hit, route to a human agent.
+  maxActionsPerSession: 50
+
+  # Detect social engineering: account info lookup followed by
+  # account modification in rapid sequence.
+  forbiddenSequences:
+    - id: account-takeover-pattern
+      name: "Account lookup followed by account modification"
+      sequence:
+        - "*.account.*read"
+        - "*.account.*update"
+      effect: require_approval
+      reason: >
+        Rapid account data lookup followed by account modification
+        is a social engineering red flag. Requires supervisor approval.
+      lookbackActions: 5
+
+defaultEffect: deny
+
+metadata:
+  category: customer-service
+  compliance:
+    - PCI-DSS
+    - GDPR
+  owner: "customer-experience-team"
+  reviewCycle: "quarterly"
+  tags:
+    - template
+    - customer-service
+    - support
+    - refunds
+    - pii-protection

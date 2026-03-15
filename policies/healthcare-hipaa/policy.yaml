@@ -1,0 +1,337 @@
+# ============================================================
+# Authensor Policy Template: Healthcare / HIPAA
+# ============================================================
+# HIPAA-aligned policy for AI agents operating in healthcare
+# environments. Designed to protect Protected Health Information
+# (PHI) while permitting routine clinical reference workflows.
+#
+# Key HIPAA considerations encoded here:
+#   - Minimum necessary access (45 CFR §164.502(b))
+#   - Access controls and audit controls (45 CFR §164.312)
+#   - Transmission security — no PHI to external APIs without
+#     an encryption flag in the envelope context
+#
+# IMPORTANT: This template is a starting point, not a complete
+# HIPAA compliance program. Work with your legal and compliance
+# team to validate against your specific covered entity / BAA
+# obligations.
+
+id: healthcare-hipaa-v1
+name: "Healthcare — HIPAA Aligned"
+version: "1.0.0"
+description: >
+  HIPAA-aligned policy for healthcare AI agents. Blocks PHI
+  access without encryption, requires human approval for data
+  exports and external API calls with patient context, and
+  allows read-only clinical reference lookups. Enforces a $50/day
+  cost budget per agent and detects dangerous action sequences.
+
+enabled: true
+
+# Run before generic policies. Healthcare rules are high-stakes.
+priority: 100
+
+scope:
+  principalTypes:
+    - agent
+    - service
+  environments:
+    - production
+    - staging
+
+rules:
+
+  # ── Rule 1: Block PHI access without encryption flag ───────────────
+  # HIPAA Transmission Security (§164.312(e)) requires encryption
+  # when transmitting PHI. We model this as a required context flag.
+  # If an action touches a PHI resource and the envelope does NOT
+  # carry context.encrypted = true, the action is denied hard.
+  - id: deny-phi-without-encryption
+    name: "Block PHI access when encryption flag is absent"
+    description: >
+      Deny any action that touches a PHI-classified resource
+      (identified by the 'phi' substring in the resource URI)
+      unless the envelope carries context.encrypted = true.
+      This enforces transmission security at the policy layer.
+    effect: deny
+    condition:
+      all:
+        # Resource URI contains 'phi' — covers paths like
+        # ehr://patients/*/phi, fhir://Patient/*/phi, etc.
+        - field: action.resource
+          operator: contains
+          value: "phi"
+        # Encryption flag is absent or false
+        - not:
+            field: context.encrypted
+            operator: eq
+            value: true
+
+  # ── Rule 2: Block PHI access to non-clinical principals ────────────
+  # Only principals with role = 'clinical' or 'care-coordinator'
+  # may access patient record resources at all.
+  - id: deny-phi-non-clinical-role
+    name: "Restrict patient record access to clinical principals"
+    description: >
+      Deny access to patient record resources for any principal
+      whose context.role is not 'clinical' or 'care-coordinator'.
+      Enforces minimum necessary access (§164.502(b)).
+    effect: deny
+    condition:
+      all:
+        - field: action.resource
+          operator: contains
+          value: "patients"
+        - not:
+            any:
+              - field: context.role
+                operator: eq
+                value: "clinical"
+              - field: context.role
+                operator: eq
+                value: "care-coordinator"
+              - field: context.role
+                operator: eq
+                value: "physician"
+
+  # ── Rule 3: Require approval — patient data exports ────────────────
+  # Bulk exports of patient data are high-risk. Any action that
+  # performs an export or download of patient data requires a
+  # human approver before execution.
+  - id: require-approval-patient-export
+    name: "Require approval for patient data exports"
+    description: >
+      Patient data export operations (bulk download, report
+      generation with PHI, FHIR bulk export) require explicit
+      human approval. Approval expires in 30 minutes.
+    effect: require_approval
+    condition:
+      any:
+        - field: action.type
+          operator: matches
+          value: "^.*\\.export$"
+        - field: action.type
+          operator: matches
+          value: "^.*\\.bulk_download$"
+        - field: action.type
+          operator: contains
+          value: "bulk-export"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "report"
+            - field: action.resource
+              operator: contains
+              value: "patient"
+    approvalConfig:
+      expiresIn: "30m"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "hipaa-privacy-officer"
+
+  # ── Rule 4: Require approval — external API calls with PHI ─────────
+  # Sending patient context to any external API (outside the
+  # EHR / FHIR boundary) requires approval. Detected by
+  # context.hasPatientContext = true on outbound http calls.
+  - id: require-approval-external-phi
+    name: "Require approval for external API calls with patient context"
+    description: >
+      Any external HTTP/API call (action.type starts with 'http.'
+      or 'api.') where the envelope indicates patient context is
+      present requires human approval before the call is made.
+      This prevents accidental PHI leakage to third parties.
+    effect: require_approval
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: startsWith
+              value: "http."
+            - field: action.type
+              operator: startsWith
+              value: "api."
+            - field: action.type
+              operator: startsWith
+              value: "webhook."
+        - field: context.hasPatientContext
+          operator: eq
+          value: true
+    approvalConfig:
+      expiresIn: "15m"
+      requiredApprovals: 2
+      approvers:
+        - type: role
+          id: "hipaa-privacy-officer"
+        - type: role
+          id: "attending-physician"
+
+  # ── Rule 5: Rate-limit clinical reference lookups ──────────────────
+  # Clinical reference reads (drug interactions, ICD codes,
+  # CPT codes, formulary lookups) are permitted but rate-limited
+  # to prevent bulk scraping of reference databases.
+  - id: allow-clinical-reference-reads
+    name: "Allow read-only clinical reference lookups (rate-limited)"
+    description: >
+      Permit reads against clinical reference resources: drug
+      databases, ICD/CPT code lookups, clinical guidelines,
+      formulary data. Rate-limited to 500 requests per hour
+      per agent to prevent bulk extraction.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".lookup"
+            - field: action.type
+              operator: endsWith
+              value: ".search"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "clinical-reference"
+            - field: action.resource
+              operator: contains
+              value: "drug-database"
+            - field: action.resource
+              operator: contains
+              value: "icd-codes"
+            - field: action.resource
+              operator: contains
+              value: "cpt-codes"
+            - field: action.resource
+              operator: contains
+              value: "formulary"
+            - field: action.resource
+              operator: contains
+              value: "guidelines"
+    rateLimit:
+      requests: 500
+      window: "1h"
+      scope: principal
+    costBudget:
+      period: "daily"
+      maxBudget: 50
+      alertThresholds: [0.7, 0.9, 1.0]
+
+  # ── Rule 6: Allow appointment and scheduling reads ─────────────────
+  # Scheduling lookups do not touch PHI fields directly and
+  # are safe for read without additional approval.
+  - id: allow-scheduling-reads
+    name: "Allow appointment and scheduling reads"
+    description: >
+      Non-PHI scheduling data (appointment slots, provider
+      availability, facility directories) may be read freely.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: endsWith
+              value: ".search"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "appointments"
+            - field: action.resource
+              operator: contains
+              value: "scheduling"
+            - field: action.resource
+              operator: contains
+              value: "availability"
+            - field: action.resource
+              operator: contains
+              value: "providers"
+
+  # ── Rule 7: Deny everything else ──────────────────────────────────
+  # Explicit catch-all deny for audit trail clarity.
+  - id: deny-all-other
+    name: "Deny all other actions"
+    description: >
+      Deny any action not explicitly permitted above. Provides
+      a clear audit trail entry with policy context.
+    effect: deny
+
+# Session rules detect dangerous action sequences within a single
+# agent session. These are evaluated BEFORE per-rule evaluation.
+sessionRules:
+  # Hard cap on actions per session. Prevents runaway agents.
+  maxActionsPerSession: 200
+
+  # Forbidden sequence: accessing a patient record then immediately
+  # making an external API call. This is the PHI leakage pattern.
+  forbiddenSequences:
+    - id: phi-leakage-sequence
+      name: "Patient record access followed by external API call"
+      sequence:
+        - "ehr.patient_record.read"
+        - "http.*"
+      effect: require_approval
+      reason: >
+        Accessing a patient record followed by an external HTTP
+        call is a PHI exfiltration risk pattern. Requires human
+        approval to proceed.
+      lookbackActions: 5
+
+    - id: bulk-phi-extraction
+      name: "Multiple patient reads followed by export"
+      sequence:
+        - "ehr.patient_record.read"
+        - "ehr.patient_record.read"
+        - "*.export"
+      effect: deny
+      reason: >
+        Reading multiple patient records followed by an export
+        matches a bulk PHI extraction pattern. Denied.
+      lookbackActions: 10
+
+  # Risk scoring. High-risk actions accumulate a session risk score.
+  # If score exceeds the threshold, further actions require approval.
+  sessionRiskThreshold:
+    maxScore: 50
+    effect: require_approval
+    riskWeights:
+      "ehr.patient_record.*": 10
+      "ehr.patient_record.read": 8
+      "*.export": 15
+      "http.*": 5
+      "api.*": 5
+      "webhook.*": 8
+      "*.delete": 20
+
+defaultEffect: deny
+
+metadata:
+  category: healthcare
+  compliance:
+    - HIPAA
+    - HITECH
+  regulatoryReferences:
+    - "45 CFR §164.502(b) — Minimum Necessary"
+    - "45 CFR §164.312(a) — Access Control"
+    - "45 CFR §164.312(b) — Audit Controls"
+    - "45 CFR §164.312(e) — Transmission Security"
+  owner: "hipaa-compliance-team"
+  reviewCycle: "quarterly"
+  tags:
+    - template
+    - healthcare
+    - hipaa
+    - phi-protection
+  notes: >
+    This template must be reviewed by your HIPAA Privacy Officer
+    before deployment. The resource URI patterns ('phi', 'patients')
+    must be updated to match your EHR system's actual URI scheme.

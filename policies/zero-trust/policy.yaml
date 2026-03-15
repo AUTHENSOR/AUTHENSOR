@@ -1,0 +1,150 @@
+# ============================================================
+# Authensor Policy Template: Zero Trust
+# ============================================================
+# Maximum security. Trust nothing. Every single action — without
+# exception — requires explicit human approval before execution.
+#
+# This is the correct starting point for:
+#   - Environments handling highly sensitive data (PII, PHI, financial)
+#   - Initial agent deployment before trust is established
+#   - Incident response contexts where you need to audit everything
+#   - Regulated industries where all agent actions must be human-reviewed
+#
+# The zero-trust model: no action is inherently safe. Approval is
+# cheap relative to the cost of an autonomous mistake.
+#
+# Evaluation order: rules are checked top to bottom.
+# The first matching rule wins. defaultEffect: deny (fail-closed).
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: zero-trust
+name: "Zero Trust — Every Action Requires Approval"
+version: "1.0.0"
+description: >
+  Maximum security policy. No budget, no autonomous actions.
+  Every action submitted by any principal type must receive explicit
+  human approval before execution. Use this as the starting point for
+  extremely sensitive environments, then selectively relax rules once
+  trust has been established through observation.
+
+enabled: true
+
+# Highest possible priority — zero-trust policy wins over everything.
+# When layering policies, this will override any lower-priority policy
+# that attempts to allow actions without approval.
+priority: 1000
+
+scope:
+  # Applies to all principal types without exception.
+  principalTypes:
+    - agent
+    - user
+    - service
+    - system
+  # Apply in all environments. Zero-trust in dev prevents bad habits
+  # that would carry over to production.
+  environments:
+    - development
+    - staging
+    - production
+
+# ── Session-level controls ────────────────────────────────────────────
+# Even in zero-trust mode, session limits prevent an attacker from
+# flooding the approval queue as a denial-of-service vector.
+sessionRules:
+  # Hard cap: no agent should need more than 20 actions per session
+  # in a zero-trust context. If an agent routinely hits this, that is
+  # a signal to review which actions can be safely allowed without
+  # approval, and move to a less restrictive policy.
+  maxActionsPerSession: 20
+
+  # Detect sequences that suggest the agent is chaining approvals to
+  # build toward a privilege escalation. Even approved actions can form
+  # dangerous patterns when combined.
+  forbiddenSequences:
+    - id: approval-chain-escalation
+      # Detect multiple consecutive admin/escalation attempts within a session.
+      # An agent with legitimate needs should not need to chain more than
+      # one admin action in immediate succession.
+      sequence:
+        - "admin.**"
+        - "admin.**"
+      effect: deny
+      lookbackActions: 3
+      reason: >
+        Two consecutive admin-category actions detected within a short
+        lookback window. In a zero-trust context this pattern indicates
+        potential privilege escalation. Session terminated.
+
+    - id: read-then-exfil
+      sequence:
+        - "data.**"
+        - "http.post"
+      effect: require_approval
+      lookbackActions: 2
+      reason: >
+        Data access followed immediately by an outbound HTTP POST may
+        indicate exfiltration. Requires additional approval review.
+
+rules:
+
+  # ── Rule 1: Require approval for ALL actions ─────────────────────────
+  # This is the core zero-trust rule. No condition — it matches
+  # every single action envelope regardless of action type, resource,
+  # principal, or any other attribute.
+  #
+  # approvalConfig settings:
+  #   requiredApprovals: 1 — one human must approve
+  #   expiresIn: "1h"      — approval requests expire in 1 hour
+  #
+  # For ultra-high-security contexts, increase requiredApprovals to 2
+  # to require two independent human reviewers (four-eyes principle).
+  - id: require-approval-everything
+    name: "Require approval for every action"
+    description: >
+      Unconditional require_approval for all actions, all principals,
+      all environments. No exceptions. This rule has no condition, so
+      it matches any envelope that reaches it. In zero-trust mode, the
+      approval workflow IS the execution path.
+    effect: require_approval
+    approvalConfig:
+      # Change to 2 for four-eyes (dual approval) requirement.
+      requiredApprovals: 1
+      # Approval requests that are not acted on within 1 hour are
+      # automatically denied. Prevents stale approvals from accumulating.
+      expiresIn: "1h"
+      approvers:
+        # Replace with actual role IDs registered in your control plane.
+        # You can list multiple approvers; any one of them can approve
+        # (or all, if requiredApprovals matches the count).
+        - type: "role"
+          id: "security-reviewer"
+        - type: "role"
+          id: "on-call-approver"
+
+# ── Default effect ────────────────────────────────────────────────────
+# Deny anything that somehow falls through (theoretically unreachable
+# since rule 1 has no condition, but belt-and-suspenders).
+defaultEffect: deny
+
+metadata:
+  category: security
+  compliance:
+    - "SOC 2 Type II"
+    - "ISO 27001"
+    - "NIST AI RMF"
+    - "Zero Trust Architecture (NIST SP 800-207)"
+  owner: "security-team"
+  tags:
+    - template
+    - zero-trust
+    - maximum-security
+    - all-approval
+  notes: >
+    Zero-trust is a starting point, not a permanent state. After deploying
+    this policy, use the Authensor audit trail to observe what actions your
+    agent actually needs. Iteratively create allow rules for low-risk read
+    operations, then for bounded writes, progressively reducing the approval
+    surface to only the actions that genuinely require human judgment.
+    The goal is proportionate security, not maximum friction.

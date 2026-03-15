@@ -1,0 +1,338 @@
+# ============================================================
+# Authensor Policy Template: EU AI Act Minimum Compliance
+# ============================================================
+# This policy implements the minimum viable controls for EU AI Act
+# compliance. It specifically targets obligations in Articles 9–14
+# of the Act, applicable to "high-risk" AI systems.
+#
+# Article 9  — Risk management system
+# Article 10 — Data governance
+# Article 12 — Record keeping (full envelope logging)
+# Article 13 — Transparency and provision of information
+# Article 14 — Human oversight
+#
+# Evaluation order: rules are checked top to bottom.
+# The first matching rule wins. defaultEffect: deny (fail-closed).
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: eu-ai-act-minimum
+name: "EU AI Act — Minimum Viable Compliance"
+version: "1.0.0"
+description: >
+  Minimum policy for EU AI Act compliance in production deployments.
+  High-risk actions (as classified by EU AI Act Annex III) require
+  human approval before execution. All decisions are logged with full
+  context for Article 12 audit trail requirements. Transparency metadata
+  is enforced: every allowed action must carry reasoning. Human oversight
+  is always preserved — agents cannot override safety limits.
+
+enabled: true
+
+# High priority so this policy takes precedence over less-restrictive
+# domain policies. EU compliance is non-negotiable in production.
+priority: 100
+
+scope:
+  # EU AI Act obligations apply to all principal types operating
+  # in a production environment.
+  environments:
+    - production
+  principalTypes:
+    - agent
+    - service
+
+# ── Session-level controls ────────────────────────────────────────────
+# Article 14 mandates that high-risk AI systems have controls enabling
+# human override at any time. maxActionsPerSession prevents runaway
+# autonomous operation without periodic human checkpoints.
+#
+# forbiddenSequences detect and halt privilege-escalation chains
+# that could cause the system to act beyond its authorised scope.
+sessionRules:
+  # Require a human checkpoint after 50 consecutive autonomous actions.
+  # Adjust downward in higher-risk deployment contexts.
+  maxActionsPerSession: 50
+
+  # Detect patterns that indicate the agent is attempting to
+  # bypass the human oversight layer.
+  forbiddenSequences:
+    - id: oversight-bypass-attempt
+      sequence:
+        - "auth.**"         # any auth action
+        - "admin.**"        # followed by any admin action
+      effect: deny
+      lookbackActions: 5
+      reason: >
+        Auth followed by admin escalation detected. This sequence may
+        indicate an attempt to bypass the human oversight requirement
+        under EU AI Act Article 14. Action denied pending review.
+
+    - id: config-then-execute
+      sequence:
+        - "config.**"
+        - "shell.exec"
+      effect: require_approval
+      lookbackActions: 3
+      reason: >
+        Configuration read followed by shell execution requires human
+        approval under Article 14 human oversight obligations.
+
+  # Cumulative session risk threshold. High-risk action chains must
+  # trigger a human checkpoint before the agent accrues too much
+  # autonomous authority within a single session.
+  sessionRiskThreshold:
+    maxScore: 40
+    effect: require_approval
+    riskWeights:
+      # Annex III categories receive higher risk weights
+      "biometric.**": 10       # biometric identification (Annex III.1)
+      "employment.**": 8       # employment/HR decisions (Annex III.4)
+      "credit.**": 8           # credit scoring (Annex III.5b)
+      "law-enforcement.**": 10 # law enforcement (Annex III.6)
+      "migration.**": 10       # border control (Annex III.7)
+      "judicial.**": 10        # justice administration (Annex III.8)
+      "education.**": 6        # education/training (Annex III.3)
+      "admin.**": 4            # administrative actions
+      "data.write": 3          # data mutations
+      "data.delete": 5         # deletions are higher risk
+      "file.write": 2
+      "file.delete": 4
+      "http.post": 2
+      "http.put": 2
+      "http.delete": 4
+      "http.get": 0            # reads are zero risk
+      "http.read": 0
+
+rules:
+
+  # ── Rule 1: Block Annex III high-risk actions lacking transparency ──
+  # Article 13 requires that high-risk AI systems provide information
+  # enabling users to interpret and use the AI output correctly.
+  # We enforce this by requiring the envelope to carry a `reasoning`
+  # field for actions classified as high-risk.
+  #
+  # If the agent cannot explain why it is taking the action, the action
+  # is blocked. This is the "transparency" gate.
+  - id: block-high-risk-missing-transparency
+    name: "Block high-risk actions without reasoning"
+    description: >
+      Article 13 (Transparency) requires meaningful explanations for
+      AI decisions affecting natural persons. This rule denies any
+      Annex III high-risk action whose envelope does not carry a
+      'reasoning' field in action.parameters. Agents must justify
+      high-risk decisions at the point of submission.
+    effect: deny
+    condition:
+      all:
+        # Match any Annex III high-risk action category
+        - any:
+            - field: action.type
+              operator: startsWith
+              value: "biometric."
+            - field: action.type
+              operator: startsWith
+              value: "employment."
+            - field: action.type
+              operator: startsWith
+              value: "credit."
+            - field: action.type
+              operator: startsWith
+              value: "law-enforcement."
+            - field: action.type
+              operator: startsWith
+              value: "migration."
+            - field: action.type
+              operator: startsWith
+              value: "judicial."
+            - field: action.type
+              operator: startsWith
+              value: "education."
+        # AND the envelope is missing a reasoning field
+        - not:
+            field: action.parameters.reasoning
+            operator: exists
+
+  # ── Rule 2: Require approval for all Annex III high-risk actions ────
+  # Article 14 (Human Oversight) mandates that high-risk AI systems
+  # allow natural persons to oversee the system and intervene.
+  # Every Annex III action must be approved by a human before execution.
+  #
+  # approvalConfig.requiredApprovals: 1 is the minimum; increase to 2
+  # for particularly sensitive contexts (law enforcement, justice).
+  - id: require-approval-high-risk-annex-iii
+    name: "Require human approval for Annex III high-risk actions"
+    description: >
+      All actions touching EU AI Act Annex III domains (biometrics,
+      employment, credit, law enforcement, border control, justice,
+      education) require explicit human approval before execution.
+      This satisfies the Article 14 human oversight obligation.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "4h"
+      approvers:
+        - type: "role"
+          id: "ai-act-compliance-officer"
+        - type: "role"
+          id: "human-oversight-approver"
+    condition:
+      any:
+        - field: action.type
+          operator: startsWith
+          value: "biometric."
+        - field: action.type
+          operator: startsWith
+          value: "employment."
+        - field: action.type
+          operator: startsWith
+          value: "credit."
+        - field: action.type
+          operator: startsWith
+          value: "law-enforcement."
+        - field: action.type
+          operator: startsWith
+          value: "migration."
+        - field: action.type
+          operator: startsWith
+          value: "judicial."
+        - field: action.type
+          operator: startsWith
+          value: "education."
+
+  # ── Rule 3: Require approval for data deletion ───────────────────────
+  # Data deletion can affect training data, audit logs, and the
+  # record-keeping obligations of Article 12. Deletions require
+  # human sign-off to ensure they are authorised and reversible.
+  - id: require-approval-data-deletion
+    name: "Require approval for data deletion"
+    description: >
+      Any deletion action (data.delete, file.delete, db.delete,
+      record.delete, *.delete) requires human approval to protect
+      Article 12 audit trail integrity and data governance under
+      Article 10.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "2h"
+      approvers:
+        - type: "role"
+          id: "data-governance-officer"
+    condition:
+      any:
+        - field: action.type
+          operator: endsWith
+          value: ".delete"
+        - field: action.type
+          operator: endsWith
+          value: ".destroy"
+        - field: action.type
+          operator: endsWith
+          value: ".purge"
+
+  # ── Rule 4: Allow read-only actions without restriction ──────────────
+  # Reads, lists, searches, and queries are non-mutating and carry no
+  # Article 12/14 concerns. Allow freely to enable the agent to gather
+  # information before presenting decisions to humans.
+  - id: allow-reads
+    name: "Allow read-only operations"
+    description: >
+      Non-mutating operations are safe to allow autonomously. The agent
+      can read, list, search, and query without human oversight as long
+      as the session risk score and action count limits are respected.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: endsWith
+          value: ".read"
+        - field: action.type
+          operator: endsWith
+          value: ".list"
+        - field: action.type
+          operator: endsWith
+          value: ".get"
+        - field: action.type
+          operator: endsWith
+          value: ".search"
+        - field: action.type
+          operator: endsWith
+          value: ".query"
+        - field: action.type
+          operator: endsWith
+          value: ".view"
+        - field: action.type
+          operator: endsWith
+          value: ".fetch"
+
+  # ── Rule 5: Allow standard write operations with rate limiting ───────
+  # Non-Annex-III writes (create, update, send, submit) are allowed
+  # subject to rate limits. Article 9 requires proportionate controls —
+  # writes are higher-risk than reads but not categorically prohibited.
+  - id: allow-writes-with-rate-limit
+    name: "Allow standard write operations with rate limit"
+    description: >
+      Standard mutations (create, update, send, submit, publish) are
+      allowed autonomously, but rate-limited to prevent runaway
+      automated decision-making. A burst of writes may indicate a
+      malfunction requiring human review.
+    effect: allow
+    rateLimit:
+      requests: 100
+      window: "1h"
+      scope: "principal"
+    condition:
+      any:
+        - field: action.type
+          operator: endsWith
+          value: ".create"
+        - field: action.type
+          operator: endsWith
+          value: ".update"
+        - field: action.type
+          operator: endsWith
+          value: ".send"
+        - field: action.type
+          operator: endsWith
+          value: ".submit"
+        - field: action.type
+          operator: endsWith
+          value: ".publish"
+
+  # ── Rule 6: Catch-all deny ───────────────────────────────────────────
+  # Anything not explicitly allowed above is denied. This includes
+  # all administrative, configuration, and privileged operations.
+  # The explicit deny improves audit log clarity over a silent
+  # defaultEffect fallthrough.
+  - id: deny-all-other
+    name: "Deny all other actions"
+    description: >
+      Explicit denial of anything not covered by rules 1–5. This
+      includes admin actions, privilege escalation, shell execution,
+      and any novel action types not yet classified.
+    effect: deny
+
+defaultEffect: deny
+
+metadata:
+  category: compliance
+  compliance:
+    - "EU AI Act 2024/1689"
+    - "Article 9 (Risk management)"
+    - "Article 10 (Data governance)"
+    - "Article 12 (Record keeping)"
+    - "Article 13 (Transparency)"
+    - "Article 14 (Human oversight)"
+  owner: "compliance-team"
+  tags:
+    - template
+    - eu-ai-act
+    - high-risk
+    - human-oversight
+    - transparency
+  notes: >
+    Review the sessionRules.maxActionsPerSession value for your specific
+    deployment context. Law enforcement and judicial use cases should
+    increase requiredApprovals to 2 and reduce the session action limit.
+    This template does NOT cover all EU AI Act obligations — consult your
+    Data Protection Officer for a full compliance assessment.

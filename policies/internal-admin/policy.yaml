@@ -1,0 +1,585 @@
+# ============================================================
+# Authensor Policy Template: Internal IT Admin Agent
+# ============================================================
+# Policy for an IT admin agent managing infrastructure:
+# servers, DNS, certificates, databases, IAM, and billing.
+#
+# The admin domain has the most severe blast radius of any
+# agent type. A single wrong action can:
+#   - Drop a production database (irreversible)
+#   - Modify IAM policies (opens security holes)
+#   - Change billing (financial exposure)
+#   - Rotate certs incorrectly (outage)
+#   - Modify DNS (widespread service disruption)
+#
+# Design principles:
+#   - Production DB drops: blocked unconditionally, no approval path
+#   - IAM changes: blocked unconditionally
+#   - Billing modifications: blocked unconditionally
+#   - Infrastructure changes (DNS, certs, server restart): require 2 approvals
+#   - Log queries, metrics, health checks: allow freely
+#   - All changes in production require approval
+#   - Development/staging changes use single approver
+#
+# Schema reference: https://authensor.dev/schemas/policy.schema.json
+
+id: internal-admin
+name: "Internal IT Admin Agent"
+version: "1.0.0"
+description: >
+  Policy for an IT admin agent managing internal infrastructure.
+  Unconditionally blocks production database drops, IAM modifications,
+  and billing changes — there is no approval path for these.
+  Infrastructure changes (server restarts, DNS, cert rotations) require
+  2-approver sign-off. Observability operations (logs, metrics, health)
+  are allowed freely. Multi-party approval (2 approvers) is required
+  for all infrastructure-mutating actions in production.
+
+enabled: true
+priority: 50
+
+scope:
+  principalTypes:
+    - agent
+    - service
+  # Admin policies apply in all environments, but approval requirements
+  # are stricter for production (see individual rules).
+  environments:
+    - development
+    - staging
+    - production
+
+# ── Session-level controls ────────────────────────────────────────────
+# Admin agents operate in high-stakes environments. Session controls
+# catch patterns that suggest the agent has gone off-script.
+sessionRules:
+  # Hard cap: admin sessions should be short and targeted.
+  # 50 actions per session is generous for targeted admin work.
+  maxActionsPerSession: 50
+
+  forbiddenSequences:
+    - id: iam-then-action
+      # Any IAM change followed by a non-read action is suspicious:
+      # the agent may be trying to create a backdoor and use it.
+      sequence:
+        - "iam.**"
+        - "infra.**"
+      effect: deny
+      lookbackActions: 3
+      reason: >
+        IAM modification followed by infrastructure action detected.
+        IAM changes are unconditionally blocked, but this sequence
+        pattern additionally indicates a potential backdoor creation
+        attempt. Session terminated.
+
+    - id: db-read-then-delete
+      # Scanning a database schema followed by a delete is a data
+      # destruction pattern.
+      sequence:
+        - "db.schema.**"
+        - "db.**.delete"
+      effect: deny
+      lookbackActions: 2
+      reason: >
+        Database schema inspection followed by a delete action.
+        This pattern suggests intentional data destruction.
+        Action denied and session flagged for review.
+
+    - id: billing-read-then-change
+      # Reading billing data then attempting to change it.
+      sequence:
+        - "billing.**"
+        - "billing.**"
+      effect: deny
+      lookbackActions: 2
+      reason: >
+        Consecutive billing-category actions detected. Billing
+        modifications are unconditionally blocked. This session
+        is flagged for review.
+
+    - id: cert-without-backup
+      # Rotating a certificate without a preceding backup is dangerous.
+      sequence:
+        - "cert.**"
+      # Only fire if there's no preceding backup action in the window.
+      # We detect this by flagging ANY cert action not preceded by a backup.
+      effect: require_approval
+      lookbackActions: 3
+      reason: >
+        Certificate action detected without a preceding backup action
+        in the lookback window. Always take a backup before cert operations.
+        Approval required to confirm backup has been taken out-of-band.
+
+  sessionRiskThreshold:
+    maxScore: 30
+    effect: require_approval
+    riskWeights:
+      # Blocked operations (weights are academic since they're denied)
+      "db.drop": 100
+      "db.truncate": 80
+      "iam.**": 100
+      "billing.**": 100
+      # Infrastructure operations
+      "infra.server.restart": 10
+      "infra.server.terminate": 15
+      "infra.server.provision": 8
+      "dns.**": 12
+      "cert.**": 12
+      "infra.deploy": 8
+      "infra.rollback": 6
+      # Database operations (non-destructive)
+      "db.write": 5
+      "db.migration.run": 8
+      # Safe observability
+      "log.query": 0
+      "metric.read": 0
+      "health.check": 0
+      "infra.status": 0
+      "db.read": 1
+
+rules:
+
+  # ═══════════════════════════════════════════════════════════════════
+  # UNCONDITIONAL BLOCKS — no approval path exists for these
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ── Rule 1: Block all production database drops ───────────────────────
+  # Dropping a production database is catastrophic and irreversible.
+  # This is an unconditional deny — no approval path exists.
+  # A human must perform this action directly via the database console.
+  - id: block-production-db-drop
+    name: "Block production database drops (unconditional)"
+    description: >
+      Dropping a production database is irreversible. This rule is an
+      unconditional deny — no approval, no override. If a production
+      database truly needs to be dropped (e.g., decommissioning), a
+      human operator must perform it directly in the database console
+      with a verified backup confirmed.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "db.drop"
+        - field: action.type
+          operator: eq
+          value: "db.database.drop"
+        - field: action.type
+          operator: eq
+          value: "db.truncate"
+        - all:
+            - field: action.type
+              operator: startsWith
+              value: "db."
+            - field: action.parameters.environment
+              operator: eq
+              value: "production"
+            - any:
+                - field: action.type
+                  operator: endsWith
+                  value: ".drop"
+                - field: action.type
+                  operator: endsWith
+                  value: ".truncate"
+                - field: action.type
+                  operator: endsWith
+                  value: ".destroy"
+
+  # ── Rule 2: Block all IAM changes ────────────────────────────────────
+  # IAM changes can silently open or close security doors.
+  # An agent must never be able to modify its own permissions or
+  # grant new permissions to any principal. Unconditional deny.
+  - id: block-iam-changes
+    name: "Block all IAM modifications (unconditional)"
+    description: >
+      IAM permission changes are unconditionally blocked for all agents.
+      An agent that can modify IAM can trivially escalate its own privileges
+      or create backdoor accounts. IAM must only be managed by human operators
+      via the cloud provider console with MFA.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: startsWith
+          value: "iam."
+        - field: action.type
+          operator: startsWith
+          value: "aws.iam."
+        - field: action.type
+          operator: startsWith
+          value: "gcp.iam."
+        - field: action.type
+          operator: startsWith
+          value: "azure.rbac."
+        - field: action.type
+          operator: startsWith
+          value: "k8s.rbac."
+
+  # ── Rule 3: Block all billing modifications ───────────────────────────
+  # Billing changes are financial decisions that must be made by humans.
+  # An agent that can modify billing can rack up charges or shut off services.
+  - id: block-billing-modifications
+    name: "Block billing modifications (unconditional)"
+    description: >
+      Billing plan changes, payment method updates, and account-level
+      spending limit modifications are unconditionally blocked. These
+      are financial decisions that require human ownership.
+    effect: deny
+    condition:
+      any:
+        - field: action.type
+          operator: startsWith
+          value: "billing."
+        - field: action.type
+          operator: startsWith
+          value: "aws.billing."
+        - field: action.type
+          operator: startsWith
+          value: "stripe.subscriptions."
+        - field: action.type
+          operator: eq
+          value: "account.upgrade"
+        - field: action.type
+          operator: eq
+          value: "account.downgrade"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # MULTI-PARTY APPROVAL — 2 approvers required for infra changes
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ── Rule 4: Require 2-approver sign-off for server operations ─────────
+  # Server restarts, provisioning, and termination have service impact.
+  # These require two independent approvers (four-eyes principle).
+  - id: require-two-approver-server-ops
+    name: "Require 2-approver sign-off for server operations"
+    description: >
+      Server restarts, new server provisioning, and server termination
+      require two independent approvers. This implements the four-eyes
+      principle for high-impact infrastructure changes. The first approver
+      validates the technical rationale; the second confirms blast radius
+      and rollback plan.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 2
+      expiresIn: "2h"
+      approvers:
+        - type: "role"
+          id: "infra-engineer"
+        - type: "role"
+          id: "on-call-lead"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "infra.server.restart"
+        - field: action.type
+          operator: eq
+          value: "infra.server.terminate"
+        - field: action.type
+          operator: eq
+          value: "infra.server.provision"
+        - field: action.type
+          operator: eq
+          value: "infra.server.stop"
+        - field: action.type
+          operator: startsWith
+          value: "k8s.pods."
+        - field: action.type
+          operator: startsWith
+          value: "ecs.service."
+
+  # ── Rule 5: Require 2-approver sign-off for DNS changes ───────────────
+  # DNS changes have a global blast radius and propagation delay makes
+  # rollback slow. Always requires two approvers.
+  - id: require-two-approver-dns-changes
+    name: "Require 2-approver sign-off for DNS changes"
+    description: >
+      DNS record modifications, zone updates, and nameserver changes
+      require two independent approvals. DNS changes propagate globally
+      and can be slow to revert. The two approvers must confirm the
+      change window, TTL settings, and rollback procedure.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 2
+      expiresIn: "2h"
+      approvers:
+        - type: "role"
+          id: "infra-engineer"
+        - type: "role"
+          id: "on-call-lead"
+    condition:
+      field: action.type
+      operator: startsWith
+      value: "dns."
+
+  # ── Rule 6: Require 2-approver sign-off for certificate rotations ──────
+  # Certificate mismanagement causes TLS outages. Rotation requires
+  # two approvers who confirm: backup taken, OCSP stapling updated,
+  # and rollback window defined.
+  - id: require-two-approver-cert-rotation
+    name: "Require 2-approver sign-off for certificate rotations"
+    description: >
+      TLS certificate rotations, renewals, and revocations require two
+      independent approvals. Approvers must confirm: a backup of the
+      current cert is stored, the rotation window is non-peak, and the
+      rollback procedure is documented.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 2
+      expiresIn: "2h"
+      approvers:
+        - type: "role"
+          id: "infra-engineer"
+        - type: "role"
+          id: "security-reviewer"
+    condition:
+      any:
+        - field: action.type
+          operator: startsWith
+          value: "cert."
+        - field: action.type
+          operator: eq
+          value: "tls.rotate"
+        - field: action.type
+          operator: eq
+          value: "ssl.renew"
+
+  # ── Rule 7: Require single approval for deployments ──────────────────
+  # Deployments to production require one approver (the on-call lead).
+  # Deployments to staging require one approver too (keep the discipline
+  # consistent regardless of environment).
+  - id: require-approval-deployments
+    name: "Require approval for deployments"
+    description: >
+      All deployments (application, container, configuration) require
+      sign-off from the on-call lead. The approver reviews the diff,
+      rollback plan, and confirms the deployment window is appropriate.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "4h"
+      approvers:
+        - type: "role"
+          id: "on-call-lead"
+    condition:
+      any:
+        - field: action.type
+          operator: startsWith
+          value: "infra.deploy"
+        - field: action.type
+          operator: startsWith
+          value: "k8s.deploy"
+        - field: action.type
+          operator: eq
+          value: "infra.rollback"
+        - field: action.type
+          operator: eq
+          value: "container.deploy"
+        - field: action.type
+          operator: eq
+          value: "app.release"
+
+  # ── Rule 8: Require approval for database migrations ─────────────────
+  # Schema migrations and data migrations are high-risk DB operations
+  # that require a single infra engineer approval.
+  - id: require-approval-db-migrations
+    name: "Require approval for database migrations"
+    description: >
+      Schema migrations (ALTER TABLE, CREATE INDEX, DROP COLUMN) and
+      data migrations require single-approver sign-off from an infra
+      engineer. Approver must confirm the migration has been tested in
+      staging and a rollback script is available.
+    effect: require_approval
+    approvalConfig:
+      requiredApprovals: 1
+      expiresIn: "2h"
+      approvers:
+        - type: "role"
+          id: "infra-engineer"
+    condition:
+      any:
+        - field: action.type
+          operator: startsWith
+          value: "db.migration."
+        - field: action.type
+          operator: eq
+          value: "db.schema.migrate"
+        - field: action.type
+          operator: eq
+          value: "db.index.create"
+        - field: action.type
+          operator: eq
+          value: "db.column.drop"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # ALLOW — Observability is always free
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ── Rule 9: Allow log queries ─────────────────────────────────────────
+  # Querying logs is read-only and essential for the agent's core
+  # diagnostic function. Allow freely with a rate limit.
+  - id: allow-log-queries
+    name: "Allow log queries"
+    description: >
+      Reading application logs, system logs, access logs, and error logs
+      is non-mutating and essential. Allowed with a rate limit to prevent
+      excessive data egress from log storage systems.
+    effect: allow
+    rateLimit:
+      requests: 500
+      window: "1h"
+      scope: "principal"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "log.query"
+        - field: action.type
+          operator: eq
+          value: "log.read"
+        - field: action.type
+          operator: eq
+          value: "log.search"
+        - field: action.type
+          operator: eq
+          value: "log.tail"
+        - field: action.type
+          operator: startsWith
+          value: "cloudwatch.logs."
+        - field: action.type
+          operator: startsWith
+          value: "datadog.logs."
+
+  # ── Rule 10: Allow metric reads ───────────────────────────────────────
+  - id: allow-metric-reads
+    name: "Allow metric reads"
+    description: >
+      Reading infrastructure metrics (CPU, memory, disk, network),
+      application metrics (latency, error rate, throughput), and
+      custom dashboards is non-mutating and allowed freely.
+    effect: allow
+    rateLimit:
+      requests: 1000
+      window: "1h"
+      scope: "principal"
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "metric.read"
+        - field: action.type
+          operator: eq
+          value: "metric.query"
+        - field: action.type
+          operator: startsWith
+          value: "cloudwatch.metrics."
+        - field: action.type
+          operator: startsWith
+          value: "datadog.metrics."
+        - field: action.type
+          operator: startsWith
+          value: "prometheus."
+        - field: action.type
+          operator: startsWith
+          value: "grafana.query."
+
+  # ── Rule 11: Allow health checks ─────────────────────────────────────
+  - id: allow-health-checks
+    name: "Allow health checks and status reads"
+    description: >
+      Health endpoints, readiness probes, uptime checks, and service
+      status reads are essential for the agent's monitoring function.
+      Allowed without rate limit.
+    effect: allow
+    condition:
+      any:
+        - field: action.type
+          operator: eq
+          value: "health.check"
+        - field: action.type
+          operator: eq
+          value: "infra.status"
+        - field: action.type
+          operator: eq
+          value: "service.status"
+        - field: action.type
+          operator: eq
+          value: "uptime.check"
+        - field: action.type
+          operator: startsWith
+          value: "health."
+        - field: action.type
+          operator: endsWith
+          value: ".status"
+        - field: action.type
+          operator: endsWith
+          value: ".health"
+
+  # ── Rule 12: Allow read-only database operations ───────────────────────
+  - id: allow-db-reads
+    name: "Allow read-only database operations"
+    description: >
+      SELECT queries, EXPLAIN plans, schema reads, and index inspection
+      are allowed with a rate limit. No writes, drops, or mutations.
+    effect: allow
+    rateLimit:
+      requests: 200
+      window: "1h"
+      scope: "principal"
+    condition:
+      all:
+        - field: action.type
+          operator: startsWith
+          value: "db."
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".query"
+            - field: action.type
+              operator: endsWith
+              value: ".explain"
+            - field: action.type
+              operator: endsWith
+              value: ".schema"
+            - field: action.type
+              operator: eq
+              value: "db.select"
+
+  # ── Rule 13: Deny all other actions ───────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    description: >
+      Catch-all deny. Admin agents are scoped to the specific action
+      vocabulary above. Any action not explicitly covered — including
+      all direct shell execution, file operations, and any provider
+      not in the policy — is denied.
+    effect: deny
+
+defaultEffect: deny
+
+metadata:
+  category: admin
+  compliance:
+    - "SOC 2 Type II"
+    - "ISO 27001 (A.9 Access Control)"
+    - "CIS Controls v8 (Control 5 — Account Management)"
+    - "NIST SP 800-53 (AC-5 Separation of Duties)"
+  owner: "infra-team"
+  tags:
+    - template
+    - admin
+    - infrastructure
+    - multi-party-approval
+    - four-eyes
+    - iam-protected
+  notes: >
+    The unconditional blocks (rules 1–3) have no approval path by design.
+    If your organisation has a legitimate need for agent-driven IAM or
+    billing changes, create a dedicated separate policy with significantly
+    higher oversight requirements (3+ approvers, separate audit log, etc.)
+    rather than weakening this template.
+    Replace placeholder role IDs (infra-engineer, on-call-lead,
+    security-reviewer) with actual Authensor role IDs before deploying.

@@ -1,0 +1,392 @@
+# ============================================================
+# Authensor Policy Template: Finance / Trading
+# ============================================================
+# Policy for AI agents operating in financial trading contexts.
+# Enforces hard position size limits, blocks restricted securities,
+# and requires human approval for significant trades and new
+# counterparty onboarding.
+#
+# Relevant regulatory contexts this template supports:
+#   - MiFID II — systematic risk controls, best execution
+#   - SEC Rule 15c3-5 — market access controls (kill switch)
+#   - FINRA — supervisory controls for algorithmic trading
+#
+# IMPORTANT: This is a template. Your legal, compliance, and
+# risk management teams must review it before production use.
+# Financial regulations vary by jurisdiction and instrument type.
+
+id: finance-trading-v1
+name: "Finance — Trading Agent"
+version: "1.0.0"
+description: >
+  Financial trading agent policy with hard limits on trade size,
+  restricted security blocking, tiered approval for large trades,
+  and a $100,000/day cumulative budget with a $10,000 per-trade cap.
+  Allows market data reads and portfolio queries freely.
+
+enabled: true
+
+# Trading policies are high-priority. Run before generic policies.
+priority: 200
+
+scope:
+  principalTypes:
+    - agent
+    - service
+  environments:
+    - production
+
+rules:
+
+  # ── Rule 1: Hard block — trades above $10,000 ─────────────────────
+  # This is the hard kill-switch. No trade over $10,000 is allowed
+  # regardless of any other approval. This models the hard circuit
+  # breaker required by market access rules (e.g., SEC 15c3-5).
+  - id: deny-large-trades
+    name: "Block trades above $10,000 (hard limit)"
+    description: >
+      Deny any trade action where constraints.maxAmount exceeds
+      $10,000. This is a hard position size limit — no approval
+      can override it. Adjust the value to match your firm's
+      risk management limits.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: matches
+              value: "^.*\\.(trade|order|buy|sell|execute)$"
+            - field: action.type
+              operator: contains
+              value: "order"
+            - field: action.type
+              operator: contains
+              value: "trade"
+        - field: constraints.maxAmount
+          operator: gt
+          value: 10000
+
+  # ── Rule 2: Hard block — restricted securities ────────────────────
+  # Block trading in securities that are on the firm's restricted
+  # list. This is modelled as checking action.parameters.ticker
+  # against a list of known restricted symbols.
+  # Update this list to match your firm's restricted securities list.
+  - id: deny-restricted-securities
+    name: "Block trades in restricted securities"
+    description: >
+      Deny trades in securities on the firm's restricted list.
+      Common reasons: insider information walls, regulatory holds,
+      compliance blackout periods, or sanctioned entities.
+    effect: deny
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "trade"
+            - field: action.type
+              operator: contains
+              value: "order"
+        - field: action.parameters.ticker
+          operator: in
+          value:
+            # Replace with your actual restricted list.
+            # This list is illustrative only.
+            - "RESTRICTED_EXAMPLE_1"
+            - "RESTRICTED_EXAMPLE_2"
+            # You can also use a resource reference:
+            # Use context.restrictedSecurities list from your
+            # compliance system if your SDK passes it through.
+
+  # ── Rule 3: Hard block — restricted counterparty onboarding
+  #           without compliance pre-approval ──────────────────────────
+  - id: deny-counterparty-from-sanctioned-jurisdiction
+    name: "Block counterparty onboarding from sanctioned jurisdictions"
+    description: >
+      Deny any new counterparty onboarding where the counterparty
+      is from a sanctioned jurisdiction (OFAC/EU/UN sanctions).
+      The jurisdiction is expected in action.parameters.jurisdiction.
+    effect: deny
+    condition:
+      all:
+        - field: action.type
+          operator: contains
+          value: "counterparty"
+        - any:
+            - field: action.type
+              operator: contains
+              value: "create"
+            - field: action.type
+              operator: contains
+              value: "onboard"
+        - field: action.parameters.jurisdiction
+          operator: in
+          value:
+            # OFAC sanctioned country codes (illustrative subset).
+            # Maintain this list from your compliance data source.
+            - "IR"
+            - "KP"
+            - "SY"
+            - "CU"
+
+  # ── Rule 4: Require approval — trades above $1,000 ────────────────
+  # Trades between $1,000 and $10,000 are not blocked but require
+  # human approval before execution. Two approvers are required for
+  # trades over $5,000; one suffices for $1,000–$5,000.
+  - id: require-approval-medium-trades
+    name: "Require approval for trades $1,000–$10,000"
+    description: >
+      Any trade action with constraints.maxAmount between $1,000
+      and $10,000 requires at least one human approver from the
+      trading desk supervisors group.
+    effect: require_approval
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "trade"
+            - field: action.type
+              operator: contains
+              value: "order"
+        - field: constraints.maxAmount
+          operator: gte
+          value: 1000
+        - field: constraints.maxAmount
+          operator: lte
+          value: 10000
+    approvalConfig:
+      expiresIn: "5m"
+      requiredApprovals: 1
+      approvers:
+        - type: role
+          id: "trading-desk-supervisor"
+
+  # ── Rule 5: Require approval — new counterparty onboarding ─────────
+  - id: require-approval-new-counterparty
+    name: "Require approval for new counterparty onboarding"
+    description: >
+      Creating or onboarding a new counterparty (broker, prime
+      broker, OTC counterparty) requires compliance sign-off
+      before the relationship is established.
+    effect: require_approval
+    condition:
+      any:
+        - all:
+            - field: action.type
+              operator: contains
+              value: "counterparty"
+            - field: action.type
+              operator: contains
+              value: "create"
+        - all:
+            - field: action.type
+              operator: contains
+              value: "counterparty"
+            - field: action.type
+              operator: contains
+              value: "onboard"
+    approvalConfig:
+      expiresIn: "24h"
+      requiredApprovals: 2
+      approvers:
+        - type: role
+          id: "compliance-officer"
+        - type: role
+          id: "head-of-trading"
+
+  # ── Rule 6: Allow market data reads (rate-limited) ─────────────────
+  # Market data reads (prices, quotes, order books, level 2 data)
+  # are read-only and permitted. Rate-limited to protect downstream
+  # data vendor APIs from runaway polling.
+  - id: allow-market-data-reads
+    name: "Allow market data reads"
+    description: >
+      Permit all read operations against market data resources:
+      prices, quotes, order books, tick data, fundamentals.
+      Rate-limited to 1000 requests per minute per agent.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+            - field: action.type
+              operator: endsWith
+              value: ".quote"
+            - field: action.type
+              operator: endsWith
+              value: ".price"
+            - field: action.type
+              operator: endsWith
+              value: ".stream"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "market-data"
+            - field: action.resource
+              operator: contains
+              value: "quotes"
+            - field: action.resource
+              operator: contains
+              value: "orderbook"
+            - field: action.resource
+              operator: contains
+              value: "ticks"
+            - field: action.resource
+              operator: contains
+              value: "prices"
+            - field: action.resource
+              operator: contains
+              value: "fundamentals"
+    rateLimit:
+      requests: 1000
+      window: "1m"
+      scope: principal
+
+  # ── Rule 7: Allow portfolio queries ───────────────────────────────
+  # Read-only portfolio state queries (positions, P&L, allocations)
+  # are safe and permitted without restrictions.
+  - id: allow-portfolio-queries
+    name: "Allow portfolio queries and position reads"
+    description: >
+      Permit read access to portfolio data: positions, P&L,
+      allocations, risk metrics, and account balance queries.
+      These are non-mutating and required for agent decision-making.
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: endsWith
+              value: ".read"
+            - field: action.type
+              operator: endsWith
+              value: ".query"
+            - field: action.type
+              operator: endsWith
+              value: ".list"
+            - field: action.type
+              operator: endsWith
+              value: ".get"
+        - any:
+            - field: action.resource
+              operator: contains
+              value: "portfolio"
+            - field: action.resource
+              operator: contains
+              value: "positions"
+            - field: action.resource
+              operator: contains
+              value: "pnl"
+            - field: action.resource
+              operator: contains
+              value: "allocations"
+            - field: action.resource
+              operator: contains
+              value: "account"
+
+  # ── Rule 8: Allow small trades without approval ────────────────────
+  # Trades under $1,000 are permitted within the daily budget.
+  # A per-trade cost cap of $10,000 is enforced at the budget layer
+  # as a redundant safety check.
+  - id: allow-small-trades
+    name: "Allow trades under $1,000"
+    description: >
+      Permit trades with constraints.maxAmount below $1,000.
+      Subject to the cumulative $100,000/day budget and a
+      per-trade cap of $10,000 (belt-and-suspenders with rule 1).
+    effect: allow
+    condition:
+      all:
+        - any:
+            - field: action.type
+              operator: contains
+              value: "trade"
+            - field: action.type
+              operator: contains
+              value: "order"
+        - field: constraints.maxAmount
+          operator: lt
+          value: 1000
+    costBudget:
+      period: "daily"
+      maxBudget: 100000
+      maxActionCost: 10000
+      alertThresholds: [0.5, 0.75, 0.9, 1.0]
+
+  # ── Rule 9: Deny all other actions ────────────────────────────────
+  - id: deny-all-other
+    name: "Deny all other actions"
+    effect: deny
+
+# Session-level controls for within-session risk management.
+sessionRules:
+  # Cap total actions per session (a session = one trading day
+  # or one algorithm run). Prevents runaway order generation.
+  maxActionsPerSession: 500
+
+  # Detect wash trading pattern: buy then immediate sell of same
+  # instrument within the same session.
+  forbiddenSequences:
+    - id: potential-wash-trade
+      name: "Buy followed immediately by sell"
+      sequence:
+        - "*.buy"
+        - "*.sell"
+      effect: require_approval
+      reason: >
+        Rapid buy-then-sell sequence may indicate wash trading.
+        Requires supervisor approval to proceed.
+      lookbackActions: 3
+
+    - id: loss-limit-override-attempt
+      name: "Loss limit check followed by trade despite loss"
+      sequence:
+        - "risk.loss_limit.check"
+        - "*.trade"
+      effect: deny
+      reason: >
+        Attempting to trade after a loss limit check violation
+        is blocked. Contact risk management.
+      lookbackActions: 2
+
+  # Risk score accumulates across the session.
+  # High-frequency trading in large size triggers approval.
+  sessionRiskThreshold:
+    maxScore: 100
+    effect: require_approval
+    riskWeights:
+      "*.trade": 5
+      "*.order": 5
+      "*.buy": 5
+      "*.sell": 5
+      "counterparty.*": 20
+      "*.cancel": 2
+
+defaultEffect: deny
+
+metadata:
+  category: finance
+  compliance:
+    - MiFID-II
+    - SEC-15c3-5
+    - FINRA-Supervisory-Controls
+  owner: "trading-risk-management"
+  reviewCycle: "monthly"
+  tags:
+    - template
+    - finance
+    - trading
+    - algorithmic
+    - market-access
+  notes: >
+    The restricted securities list and sanctioned jurisdiction list
+    must be maintained by your compliance team and kept current.
+    Consider automating updates from your compliance data feeds.
+    Trade size limits must be validated against your firm's risk
+    limits and regulatory capital requirements.
