@@ -1,6 +1,6 @@
 {
   "name": "@authensor/langchain",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Authensor guardrail adapter for LangChain/LangGraph",
   "type": "module",
   "main": "./dist/index.js",

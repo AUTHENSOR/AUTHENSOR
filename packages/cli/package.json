@@ -1,6 +1,6 @@
 {
   "name": "@authensor/cli",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "The open-source safety stack for AI agents — one command to make your agent safe",
   "type": "module",
   "bin": {

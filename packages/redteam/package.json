@@ -1,6 +1,6 @@
 {
   "name": "@authensor/redteam",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Adversarial red-team test seeds for AI agent safety evaluation — 15 attack patterns across 5 categories mapped to MITRE ATLAS",
   "type": "module",
   "main": "./dist/index.js",
