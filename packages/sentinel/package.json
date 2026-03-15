@@ -1,6 +1,6 @@
 {
   "name": "@authensor/sentinel",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Real-time monitoring and anomaly detection for AI agents — behavioral baselines, cost tracking, alert rules",
   "type": "module",
   "main": "./dist/index.js",

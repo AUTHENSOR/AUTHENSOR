@@ -1,6 +1,6 @@
 {
   "name": "@authensor/aegis",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Content safety engine for AI agents — detects PII, prompt injection, credentials, and malicious patterns",
   "type": "module",
   "main": "./dist/index.js",

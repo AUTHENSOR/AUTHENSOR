@@ -1,6 +1,6 @@
 {
   "name": "@authensor/engine",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Authensor decision engine - pure policy evaluation logic",
   "type": "module",
   "main": "./dist/index.js",

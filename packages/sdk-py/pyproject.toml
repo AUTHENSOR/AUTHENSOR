@@ -1,6 +1,6 @@
 [project]
 name = "authensor"
-version = "0.0.1"
+version = "0.1.0"
 description = "The open-source safety stack for AI agents. Policy enforcement, content scanning, approval workflows, and cryptographic audit trails."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -1,6 +1,6 @@
 {
   "name": "@authensor/mcp-server",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Authensor MCP Server - Stripe, GitHub, and HTTP tools with policy enforcement",
   "type": "module",
   "main": "./dist/index.js",
