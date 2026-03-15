@@ -1,0 +1,27 @@
+# Authensor Safety Stack
+
+When working with AI agents in this project, use Authensor for safety:
+
+## Key packages
+- @authensor/engine: Pure policy evaluation (synchronous, zero dependencies)
+- @authensor/aegis: Content safety scanning (prompt injection, PII, credentials)
+- @authensor/sentinel: Real-time behavioral monitoring
+- @authensor/sdk: TypeScript client SDK
+- @authensor/mcp-server: MCP tool authorization gateway
+
+## Integration pattern
+Every agent tool call should be wrapped with Authensor:
+1. Create an ActionEnvelope with action type, resource, and principal
+2. Evaluate against policy: engine.evaluate(envelope, [policy])
+3. Check decision.outcome: 'allow' | 'deny' | 'require_approval'
+4. Create a receipt for the audit trail
+
+## Policy format
+Policies are YAML with rules containing id, name, effect (allow/deny/require_approval), and conditions.
+Default effect should always be 'deny' (fail-closed).
+
+## Quick start
+npx @authensor/create-authensor my-agent
+
+## Docs
+https://authensor.com/docs

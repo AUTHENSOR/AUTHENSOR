@@ -1,28 +1,19 @@
 {
   "name": "Authensor Development",
-  "dockerComposeFile": "../docker-compose.yml",
-  "service": "control-plane",
-  "workspaceFolder": "/app",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
   "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "20"
-    }
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" }
   },
-  "forwardPorts": [3000, 3001, 5432],
   "postCreateCommand": "corepack enable && pnpm install",
-  "postStartCommand": "pnpm dev",
+  "forwardPorts": [3000, 5432],
   "customizations": {
     "vscode": {
       "extensions": [
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "ms-vscode.vscode-typescript-next"
-      ],
-      "settings": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "editor.formatOnSave": true,
-        "typescript.preferences.importModuleSpecifier": "relative"
-      }
+        "redhat.vscode-yaml"
+      ]
     }
   }
 }

@@ -1,0 +1,33 @@
+node_modules
+.git
+.claude
+dist
+*.md
+!README.md
+
+# Untracked media/backup directories
+15RL Favicons/
+Auth-Video-Pics/
+Authensor Backups:Misc/
+Authensor Live Demo/
+Authensor Visual Pack/
+Authensor-Shorts/
+Authensor-for-OpenClaw/
+SafeClaw/
+authensor-site/
+authensor-video/
+garden/
+remotion-project/
+safeclaw-redteam/
+Authensor-Visual-Function.png
+
+# Test fixtures / non-runtime
+**/test/
+**/*.test.ts
+**/*.spec.ts
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+*.log

@@ -47,3 +47,20 @@ pnpm-debug.log*
 
 # Claude Code
 .claude/
+
+# Media / backup folders (not part of the codebase)
+15RL Favicons/
+Auth-Video-Pics/
+Authensor Backups:Misc/
+Authensor Live Demo/
+Authensor Visual Pack/
+Authensor-Shorts/
+Authensor-Visual-Function.png
+Authensor-for-OpenClaw/
+authensor-video/
+SafeClaw/
+safeclaw-redteam/
+garden/
+remotion-project/
+SPRINT-NOW.md
+TODO-NEXT.md

@@ -44,9 +44,19 @@
   "keywords": [
     "authensor",
     "mcp",
+    "mcp-server",
+    "mcp-security",
     "model-context-protocol",
-    "stripe",
-    "github"
+    "ai-safety",
+    "agent-safety",
+    "guardrails",
+    "policy-engine",
+    "ai-agent",
+    "agentic-ai",
+    "security",
+    "open-source",
+    "authorization",
+    "tool-governance"
   ],
   "license": "MIT",
   "repository": {

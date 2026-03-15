@@ -35,7 +35,19 @@
   "keywords": [
     "authensor",
     "engine",
-    "policy"
+    "policy",
+    "policy-engine",
+    "ai-safety",
+    "agent-safety",
+    "guardrails",
+    "ai-agent",
+    "agentic-ai",
+    "security",
+    "open-source",
+    "authorization",
+    "decision-engine",
+    "abac",
+    "fail-closed"
   ],
   "license": "MIT",
   "repository": {
