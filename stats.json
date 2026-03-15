@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-03-15T09:54:53.266Z",
+  "codebase": {
+    "detectionRules": 210,
+    "testCases": 1148,
+    "policyTemplates": 15,
+    "frameworkAdapters": 5,
+    "packages": 11,
+    "redteamPayloads": 30
+  }
+}

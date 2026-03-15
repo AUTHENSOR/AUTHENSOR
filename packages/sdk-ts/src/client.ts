@@ -5,6 +5,7 @@
  */
 
 import { createEnvelope } from './envelope.js';
+import { TelemetryReporter } from './telemetry.js';
 import type {
   ActionEnvelope,
   Decision,
@@ -28,6 +29,10 @@ export interface AuthensorConfig {
   environment?: 'development' | 'staging' | 'production';
   /** Request timeout in ms */
   timeout?: number;
+  /** Enable anonymous telemetry reporting (opt-in, default false) */
+  telemetry?: boolean;
+  /** Custom telemetry endpoint (defaults to central Authensor stats) */
+  telemetryEndpoint?: string;
 }
 
 export class Authensor {
@@ -35,6 +40,7 @@ export class Authensor {
     Pick<AuthensorConfig, 'controlPlaneUrl' | 'principalId' | 'principalType'>
   > &
     AuthensorConfig;
+  private reporter: TelemetryReporter | null = null;
 
   constructor(config: AuthensorConfig) {
     this.config = {
@@ -44,6 +50,11 @@ export class Authensor {
       ...config,
       controlPlaneUrl: config.controlPlaneUrl.replace(/\/$/, ''),
     };
+
+    if (config.telemetry) {
+      this.reporter = new TelemetryReporter(config.telemetryEndpoint);
+      this.reporter.start();
+    }
   }
 
   /**
@@ -63,6 +74,18 @@ export class Authensor {
   }> {
     const envelope = this.createEnvelope(actionType, resource, options);
     const response = await this.sendEvaluate(envelope);
+
+    // Anonymous telemetry (opt-in)
+    if (this.reporter) {
+      this.reporter.increment('actions_evaluated');
+      this.reporter.increment('receipts_created');
+      if (response.decision.outcome === 'deny') {
+        this.reporter.increment('threats_detected');
+      }
+      if (response.decision.outcome === 'require_approval') {
+        this.reporter.increment('approvals_requested');
+      }
+    }
 
     return {
       allowed: response.decision.outcome === 'allow',

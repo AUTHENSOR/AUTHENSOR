@@ -24,6 +24,7 @@ import { transparencyRoute } from './routes/transparency.js';
 import { shadowRoute } from './routes/shadow.js';
 import { budgetsRoute } from './routes/budgets.js';
 import { complianceRoute } from './routes/compliance.js';
+import { statsRoute } from './routes/stats.js';
 import { authMiddleware } from './auth/middleware.js';
 import { rateLimitMiddleware } from './middleware/rate_limit.js';
 import { bodyLimitMiddleware } from './middleware/body_limit.js';
@@ -45,6 +46,9 @@ export function createApp() {
   app.get('/policies/default', (c) => {
     return c.json({ policy: DEFAULT_SAFE_POLICY });
   });
+
+  // Public stats: anonymous aggregate counters (before auth middleware)
+  app.route('/stats', statsRoute);
 
   // Policy templates: GET endpoints are public discovery, POST /apply requires admin
   app.route('/templates', templatesRoute);
