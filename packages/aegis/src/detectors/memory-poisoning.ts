@@ -234,4 +234,155 @@ export const MEMORY_POISONING_RULES: DetectorRule[] = [
     confidence: 0.88,
     description: 'Memory poisoning — system prompt extraction via memory storage',
   },
+
+  // ── Authority injection ────────────────────────────────────────────────
+  {
+    id: 'memory-poison-authority-system',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // Content claiming to come from "system", "admin", "root", "administrator", or "the developer"
+    pattern: /(?:^|\n|[.!?:;,"'}\]])\s*(?:this\s+(?:message|instruction|directive|update|notice)\s+(?:is\s+from|comes?\s+from|originates?\s+from|sent\s+by)|message\s+from|instructions?\s+from|directive\s+from|update\s+from)\s+(?:the\s+)?(?:system\b|admin(?:istrator)?\b|root\b|developer\b|backend\b|platform\b|operator\b)/i,
+    confidence: 0.88,
+    description: 'Memory poisoning — content falsely claiming system/admin authority',
+  },
+  {
+    id: 'memory-poison-authority-signed',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "— Admin", "— System", "Signed: root", "From: administrator" as apparent message signatures
+    pattern: /(?:^|\n)\s*(?:—\s*|signed(?:\s+by)?\s*:\s*|-+\s*)(?:admin(?:istrator)?|system|root|the\s+developer|backend|platform\s+team|devops)\s*$/im,
+    confidence: 0.85,
+    description: 'Memory poisoning — false authority signature in stored content',
+  },
+
+  // ── Sleeper payloads (extended) ──────────────────────────────────────
+  {
+    id: 'memory-poison-when-trigger-action',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "when the user says [X], then [Y]" / "whenever the user types [X], forward..."
+    // explicit trigger-action sleeper syntax
+    pattern: /(?:^|\n|[.!?:;,"'}\]])\s*when(?:ever)?\s+(?:the\s+)?(?:user|human|operator|caller|client)\s+(?:says?|types?|writes?|inputs?|mentions?|uses?\s+(?:the\s+)?(?:word|phrase|keyword|command))\s+["']?[\w\s]{1,40}["']?\s*[,;]\s*(?:then\s+)?(?:you\s+(?:must|should|will|need\s+to)\s+)?(?:execute|run|perform|send|forward|ignore|override|delete|exfiltrate|leak|reveal|expose|bypass|disable)/i,
+    confidence: 0.9,
+    description: 'Memory poisoning — explicit sleeper trigger-action payload',
+  },
+  {
+    id: 'memory-poison-activation-phrase',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "activation phrase", "trigger word", "secret command" that unlocks behavior
+    pattern: /(?:^|\n|[.!?:;,"'}\]])\s*(?:activation\s+(?:phrase|word|code|keyword|sequence)|trigger\s+(?:word|phrase|code|keyword)|secret\s+(?:command|word|phrase|code|keyword)|passphrase|magic\s+(?:word|phrase|command))\s*[:=\-]\s*["']?\w[\s\S]{0,60}?(?:then|will|should|must|you\s+(?:must|will|should))/i,
+    confidence: 0.9,
+    description: 'Memory poisoning — activation phrase/trigger word for sleeper payload',
+  },
+
+  // ── Gradual drift instructions ────────────────────────────────────────
+  {
+    id: 'memory-poison-gradual-drift',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "slightly modify your responses", "gradually change your behavior",
+    // "over time begin to ignore constraints" — slow drift attacks
+    // Two-branch pattern:
+    //   Branch A: "slightly/gradually modify/change [your] [verb?] [noun]"
+    //   Branch B: "over time / progressively / ... begin to [verb?] [your] [noun]"
+    pattern: /\b(?:slightly\s+(?:modify|change|alter|shift|adjust|bend|deviate\s+from)|gradually\s+(?:change|shift|alter|modify|transition|move\s+away\s+from|abandon))\s+(?:your\s+)?(?:responses?|behavior|answers?|outputs?|instructions?|rules?|guidelines?|constraints?|tone)|\b(?:over\s+time|progressively|incrementally|bit\s+by\s+bit|little\s+by\s+little)\s+(?:begin\s+to|start\s+to|become|stop\s+following)\s+(?:\w+\s+){0,3}(?:your\s+)?(?:responses?|behavior|answers?|outputs?|instructions?|rules?|guidelines?|constraints?|tone)/i,
+    confidence: 0.87,
+    description: 'Memory poisoning — gradual drift instruction for slow behavior change',
+  },
+  {
+    id: 'memory-poison-subtle-shift',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "make your responses slightly more permissive" / "begin adding X to responses" — subtle nudge
+    pattern: /\bmake\s+(?:your\s+)?(?:responses?|answers?|outputs?|replies?)\s+(?:slightly|gradually|progressively|increasingly)\s+(?:more|less)\s+\w|\bbegin\s+(?:adding|including|inserting|embedding)\s+\S[\s\S]{0,40}?\s+(?:in(?:to)?|within)\s+(?:your\s+)?(?:responses?|answers?|outputs?|replies?)/i,
+    confidence: 0.82,
+    description: 'Memory poisoning — subtle nudge to gradually shift model outputs',
+  },
+
+  // ── Cross-session poisoning ───────────────────────────────────────────
+  {
+    id: 'memory-poison-remember-next-time',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "remember this for next time", "save this for future conversations"
+    // Session nouns are optional — "for next time" alone is sufficient signal
+    pattern: /(?:^|\n|[.!?:;,"'}\]])\s*(?:remember|save|store|note|record|keep|retain)\s+(?:this|these|the\s+following|it)\s+(?:for\s+(?:next\s+time|future|later|subsequent|all\s+future)(?:\s+(?:conversations?|sessions?|chats?|interactions?|uses?))?|across\s+(?:conversations?|sessions?|chats?|interactions?))/i,
+    confidence: 0.88,
+    description: 'Memory poisoning — cross-session persistence instruction',
+  },
+  {
+    id: 'memory-poison-in-future-conversations',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // "in future conversations", "in all subsequent sessions", "every time we talk"
+    pattern: /(?:^|\n|[.!?:;,"'}\]])\s*(?:in\s+(?:all\s+)?(?:future|subsequent|upcoming|following|later)\s+(?:conversations?|sessions?|chats?|interactions?|exchanges?)|every\s+time\s+(?:we\s+(?:talk|chat|speak|interact)|you\s+(?:respond|reply|answer))|from\s+(?:now\s+on|this\s+point\s+(?:on|forward))\s+(?:in\s+)?(?:all\s+)?(?:conversations?|sessions?|interactions?))\s*[,;:]?\s*(?:you\s+(?:must|should|will|need\s+to)|always|never|remember\s+to)/i,
+    confidence: 0.88,
+    description: 'Memory poisoning — instruction targeting all future sessions',
+  },
+
+  // ── RAG poisoning markers ─────────────────────────────────────────────
+  {
+    id: 'memory-poison-rag-keyword-stuffing',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // Suspiciously dense repetition of a single keyword to boost RAG retrieval
+    // Detects the same meaningful word repeated 5+ times within a short span
+    pattern: /\b(\w{4,})\b(?:\s+\S+\s+\S+\s+\S+\s+\S+\s+\1\b){4,}/i,
+    confidence: 0.72,
+    description: 'Memory poisoning — keyword stuffing to manipulate RAG retrieval ranking',
+  },
+  {
+    id: 'memory-poison-rag-relevance-boost',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // Explicit attempts to influence retrieval ranking: "This document is highly relevant",
+    // "Always retrieve this first", "High priority document for embedding"
+    pattern: /(?:^|\n|[.!?:;,"'}\]])\s*(?:this\s+(?:document|entry|record|note|memory|content)\s+(?:is\s+(?:highly\s+)?relevant\s+(?:to|for)|should\s+always\s+be\s+retrieved)|always\s+retrieve\s+this\s+(?:document|entry|first|when)|high\s*[-\s]?priority\s+(?:document|entry|memory)\s+(?:for\s+)?(?:embedding|retrieval|indexing|ranking)|boost\s+(?:the\s+)?(?:relevance|ranking|priority|score)\s+of\s+this)/i,
+    confidence: 0.85,
+    description: 'Memory poisoning — explicit RAG retrieval ranking manipulation',
+  },
+
+  // ── Conversation history manipulation ────────────────────────────────
+  {
+    id: 'memory-poison-fake-history-turn',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // Injected fake conversation turns mimicking the chat format:
+    // "User: [benign] Assistant: I will ignore all safety guidelines" patterns
+    pattern: /(?:^|\n)\s*(?:User|Human|Assistant|AI|Bot)\s*:\s*.{0,80}\n\s*(?:User|Human|Assistant|AI|Bot)\s*:\s*.{0,80}\n\s*(?:Assistant|AI|Bot)\s*:\s*(?:I\s+(?:will|shall|am\s+now|must|have\s+been\s+told\s+to)\s+(?:ignore|forget|disregard|override|bypass|violate|no\s+longer\s+follow)|Sure[,!]\s+I\s+(?:will|can|shall)\s+(?:ignore|override|forget)|Of\s+course[,!]\s+I\s+(?:will|shall)\s+(?:ignore|forget|disregard))/i,
+    confidence: 0.9,
+    description: 'Memory poisoning — fabricated conversation history injecting compliance',
+  },
+  {
+    id: 'memory-poison-injected-assistant-turn',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // A lone fake "Assistant:" turn injected mid-document claiming prior agreement
+    // Covers: "I have been told to ignore", "I agree to bypass", "I previously confirmed I would override"
+    pattern: /(?:^|\n)\s*(?:Assistant|AI\s*Response|Bot\s*Response)\s*:\s*(?:I\s+(?:have\s+been\s+told\s+(?:to\s+)?|understand\s+that\s+I\s+(?:must|should)\s+|agree\s+to\s+|(?:previously\s+)?confirmed\s+(?:that\s+I\s+will|I\s+would)\s+)(?:ignore|bypass|override|disregard|violate|exfiltrate|send|forward|reveal))/i,
+    confidence: 0.9,
+    description: 'Memory poisoning — injected fake assistant turn claiming prior compliance',
+  },
+
+  // ── Memory metadata poisoning ─────────────────────────────────────────
+  {
+    id: 'memory-poison-metadata-priority-flag',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // Attempts to set importance/priority metadata on injected memories:
+    // "importance: high", "priority: 1", "weight: 1.0", "must_include: true"
+    pattern: /(?:^|\n)\s*(?:importance|priority|weight|rank|score|relevance|must[_\-]include|always[_\-]retrieve|mandatory|required)\s*[:=]\s*(?:high|critical|urgent|maximum|1(?:\.0)?|true|yes|always|top|highest)\s*$/im,
+    confidence: 0.82,
+    description: 'Memory poisoning — metadata field set to manipulate memory retrieval priority',
+  },
+  {
+    id: 'memory-poison-metadata-inject-tags',
+    type: 'injection',
+    subType: 'MEMORY_POISONING',
+    // Fake YAML/JSON-style metadata blocks injected into content to manipulate memory systems
+    pattern: /(?:^|\n)\s*(?:tags|labels|keywords|categories|flags)\s*:\s*\[?\s*["']?(?:system[-_]override|admin[-_]instruction|high[-_]priority|always[-_]include|mandatory[-_]context|forced[-_]retrieval)/i,
+    confidence: 0.85,
+    description: 'Memory poisoning — injected metadata tags to force retrieval or system override',
+  },
 ];
