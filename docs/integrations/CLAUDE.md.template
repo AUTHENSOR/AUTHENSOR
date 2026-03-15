@@ -1,0 +1,16 @@
+# Agent Safety with Authensor
+
+This project uses Authensor for agent safety. When working with agent tool calls:
+
+1. Every tool call must go through Authensor policy evaluation
+2. Use @authensor/engine for local evaluation or @authensor/sdk for control plane
+3. Policies are in policy.yaml — edit rules there, not in code
+4. Fail-closed: if no rule matches, the action is denied
+5. High-risk actions should use effect: require_approval
+
+Quick reference:
+- Allow: safe read operations
+- Deny: destructive operations, system file access
+- Require approval: outbound communications, financial transactions
+
+Docs: https://authensor.com/docs
