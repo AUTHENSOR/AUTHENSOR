@@ -1,20 +1,39 @@
 name: 'Authensor Aegis Scan'
-description: 'Scan agent code and prompts for prompt injection, PII, credentials, and memory poisoning'
+description: 'Scan AI agent code and prompts for prompt injection, PII leaks, credential exposure, and memory poisoning. Zero config, zero dependencies.'
+author: 'Authensor'
+
 branding:
   icon: 'shield'
-  color: 'red'
+  color: 'orange'
+
 inputs:
   path:
-    description: 'Path to scan (file or directory)'
+    description: 'File or directory to scan. Defaults to the repository root.'
     required: false
     default: '.'
   fail-on-detection:
-    description: 'Fail the workflow if threats are detected'
+    description: 'Set to "true" to fail the workflow when any threat is detected. Set to "false" to report only.'
     required: false
     default: 'true'
   config:
-    description: 'Path to Aegis config file'
+    description: 'Path to an Aegis config file (.aegisrc.json) for custom rule overrides.'
     required: false
+  severity-threshold:
+    description: 'Minimum severity to report: "low", "medium", "high", or "critical". Defaults to "low" (report everything).'
+    required: false
+    default: 'low'
+
+outputs:
+  findings-count:
+    description: 'Total number of findings detected by the scan.'
+    value: ${{ steps.scan.outputs.findings-count }}
+  safe:
+    description: 'Boolean string ("true" or "false"). "true" when zero findings were detected.'
+    value: ${{ steps.scan.outputs.safe }}
+  report-path:
+    description: 'Absolute path to the JSON report file.'
+    value: ${{ steps.scan.outputs.report-path }}
+
 runs:
   using: 'composite'
   steps:
@@ -22,14 +41,52 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+
     - name: Install Aegis
       shell: bash
-      run: npm install -g @authensor/aegis @authensor/cli
+      run: npm install -g @authensor/aegis@latest @authensor/cli@latest
+
     - name: Run Aegis Scan
+      id: scan
       shell: bash
       run: |
-        echo "🛡️ Authensor Aegis — Scanning for agent safety threats"
-        echo "Path: ${{ inputs.path }}"
-        npx authensor scan ${{ inputs.path }} --format github-actions
+        REPORT_PATH="${RUNNER_TEMP}/aegis-report.json"
+        echo "report-path=${REPORT_PATH}" >> "$GITHUB_OUTPUT"
+
+        SCAN_ARGS="${{ inputs.path }} --format json --output ${REPORT_PATH} --severity ${{ inputs.severity-threshold }}"
+        if [ -n "${{ inputs.config }}" ]; then
+          SCAN_ARGS="${SCAN_ARGS} --config ${{ inputs.config }}"
+        fi
+
+        npx authensor scan ${SCAN_ARGS} || true
+
+        if [ -f "${REPORT_PATH}" ]; then
+          COUNT=$(node -e "const r=require('${REPORT_PATH}'); console.log(r.findings?.length ?? 0)")
+        else
+          COUNT=0
+        fi
+
+        echo "findings-count=${COUNT}" >> "$GITHUB_OUTPUT"
+        if [ "${COUNT}" -eq 0 ]; then
+          echo "safe=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "safe=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        echo "## Aegis Scan Results" >> "$GITHUB_STEP_SUMMARY"
+        if [ "${COUNT}" -eq 0 ]; then
+          echo "No threats detected." >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "**${COUNT} finding(s) detected.**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo 'See the [full report artifact](.) for details.' >> "$GITHUB_STEP_SUMMARY"
+        fi
       env:
         AEGIS_FAIL_ON_DETECTION: ${{ inputs.fail-on-detection }}
+
+    - name: Fail on detection
+      if: inputs.fail-on-detection == 'true' && steps.scan.outputs.safe == 'false'
+      shell: bash
+      run: |
+        echo "::error::Aegis detected ${{ steps.scan.outputs.findings-count }} threat(s). Set fail-on-detection to 'false' to report without failing."
+        exit 1
