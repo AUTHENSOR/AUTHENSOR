@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authensor Shield</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0f0f13;
+      --bg-card: #16161d;
+      --bg-card-hover: #1c1c26;
+      --gold: #C9A227;
+      --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.3);
+      --red: #ef4444;
+      --cream: #f5f0e8;
+      --cream-dim: #a09888;
+      --charcoal: #2a2a35;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono: "SF Mono", "Fira Code", "Consolas", monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--cream);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .header { text-align: center; margin-bottom: 32px; }
+    .header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 4px; }
+    .header p { font-size: 0.8rem; color: var(--cream-dim); }
+
+    /* Power button */
+    .power-container { display: flex; flex-direction: column; align-items: center; margin-bottom: 28px; }
+    .power-ring {
+      position: relative; width: 140px; height: 140px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.4s ease; user-select: none;
+    }
+    .power-ring::before {
+      content: ""; position: absolute; inset: 0; border-radius: 50%;
+      border: 3px solid var(--charcoal); transition: all 0.4s ease;
+    }
+    .power-ring.active::before {
+      border-color: var(--green);
+      box-shadow: 0 0 30px var(--green-glow), 0 0 60px var(--green-glow), inset 0 0 20px var(--green-glow);
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 30px var(--green-glow), 0 0 60px var(--green-glow), inset 0 0 20px var(--green-glow); }
+      50% { box-shadow: 0 0 40px var(--green-glow), 0 0 80px var(--green-glow), inset 0 0 30px var(--green-glow); }
+    }
+    .power-ring:active { transform: scale(0.95); }
+    .power-icon { width: 44px; height: 44px; stroke: var(--charcoal); stroke-width: 2.5; fill: none; transition: stroke 0.4s ease; }
+    .power-ring.active .power-icon { stroke: var(--green); filter: drop-shadow(0 0 8px var(--green-glow)); }
+    .status-label { margin-top: 14px; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.4s ease; }
+    .status-label.active { color: var(--green); }
+    .status-label.inactive { color: var(--cream-dim); }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 400px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg-card); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid var(--charcoal); }
+    .stat-value { font-size: 1.3rem; font-weight: 700; color: var(--cream); font-variant-numeric: tabular-nums; }
+    .stat-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--cream-dim); margin-top: 3px; }
+
+    /* Apps section */
+    .apps-section { width: 100%; max-width: 400px; margin-bottom: 24px; }
+    .apps-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cream-dim); margin-bottom: 10px; }
+    .app-card {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--bg-card); border-radius: 10px; padding: 14px 16px;
+      border: 1px solid var(--charcoal); margin-bottom: 8px; transition: border-color 0.2s;
+    }
+    .app-card:hover { border-color: rgba(255,255,255,0.1); }
+    .app-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+    .app-icon.claude { background: rgba(201,162,39,0.15); color: var(--gold); }
+    .app-icon.cursor { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .app-icon.openai { background: rgba(52,211,153,0.15); color: #34d399; }
+    .app-info { flex: 1; }
+    .app-name { font-size: 0.88rem; font-weight: 600; color: var(--cream); }
+    .app-status { font-size: 0.7rem; color: var(--cream-dim); margin-top: 2px; }
+    .app-status.protected { color: var(--green); }
+    .app-btn {
+      padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer;
+      font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+      transition: all 0.2s; flex-shrink: 0;
+    }
+    .app-btn.protect { background: var(--green); color: #0f0f13; }
+    .app-btn.protect:hover { opacity: 0.85; }
+    .app-btn.protected { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+    .app-btn.uninstall { background: transparent; color: var(--cream-dim); border: 1px solid var(--charcoal); font-size: 0.65rem; }
+    .app-btn.uninstall:hover { border-color: var(--red); color: var(--red); }
+    .app-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .app-not-found { font-size: 0.72rem; color: var(--cream-dim); font-style: italic; }
+
+    /* Activity */
+    .activity-section { width: 100%; max-width: 400px; margin-bottom: 24px; }
+    .activity-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cream-dim); margin-bottom: 8px; }
+    .activity-item {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-card); border-radius: 6px; padding: 8px 12px;
+      border: 1px solid var(--charcoal); font-size: 0.75rem; margin-bottom: 4px;
+    }
+    .badge { padding: 2px 7px; border-radius: 3px; font-size: 0.58rem; font-weight: 700; text-transform: uppercase; flex-shrink: 0; }
+    .badge-allow { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-block { background: rgba(239,68,68,0.15); color: var(--red); }
+    .activity-provider { color: var(--gold); font-weight: 600; min-width: 60px; flex-shrink: 0; }
+    .activity-path { color: var(--cream-dim); font-family: var(--mono); font-size: 0.65rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-empty { text-align: center; padding: 16px; color: var(--cream-dim); font-size: 0.75rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--charcoal); }
+
+    /* Developer toggle */
+    .dev-section { width: 100%; max-width: 400px; }
+    .dev-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.7rem; color: var(--cream-dim); margin-bottom: 10px; user-select: none; }
+    .dev-toggle:hover { color: var(--cream); }
+    .dev-content { display: none; background: var(--bg-card); border-radius: 8px; padding: 14px; border: 1px solid var(--charcoal); }
+    .dev-content.show { display: block; }
+    .env-line { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .env-line:last-child { margin-bottom: 0; }
+    .env-code { flex: 1; background: var(--bg); border-radius: 4px; padding: 6px 10px; font-family: var(--mono); font-size: 0.68rem; color: var(--cream); border: 1px solid var(--charcoal); white-space: nowrap; overflow-x: auto; }
+    .copy-btn { background: var(--charcoal); border: 1px solid rgba(201,162,39,0.3); color: var(--gold); padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.6rem; font-weight: 600; text-transform: uppercase; transition: all 0.2s; flex-shrink: 0; }
+    .copy-btn:hover { background: rgba(201,162,39,0.15); }
+    .copy-btn.copied { background: rgba(34,197,94,0.15); border-color: var(--green); color: var(--green); }
+
+    .footer { margin-top: 20px; font-size: 0.6rem; color: var(--cream-dim); opacity: 0.4; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--green); color: #0f0f13; padding: 8px 18px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 100; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Authensor Shield</h1>
+    <p>AI Safety Proxy</p>
+  </div>
+
+  <div class="power-container">
+    <div class="power-ring" id="powerBtn" onclick="toggleShield()">
+      <svg class="power-icon" viewBox="0 0 24 24">
+        <path d="M12 2v10" stroke-linecap="round" />
+        <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64" stroke-linecap="round" />
+      </svg>
+    </div>
+    <div class="status-label inactive" id="statusLabel">Shield Off</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="statScanned">0</div>
+      <div class="stat-label">Scanned</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statBlocked">0</div>
+      <div class="stat-label">Blocked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statUptime">0s</div>
+      <div class="stat-label">Uptime</div>
+    </div>
+  </div>
+
+  <!-- One-click app protection -->
+  <div class="apps-section">
+    <div class="apps-title">Protect Your Apps</div>
+    <div id="appsList">
+      <div class="activity-empty">Detecting installed apps...</div>
+    </div>
+  </div>
+
+  <!-- Activity log -->
+  <div class="activity-section">
+    <div class="activity-title">Recent Activity</div>
+    <div id="activityList">
+      <div class="activity-empty">No requests yet</div>
+    </div>
+  </div>
+
+  <!-- Ecosystem status -->
+  <div class="apps-section">
+    <div class="apps-title">Authensor Ecosystem</div>
+    <div id="ecosystemList">
+      <div class="activity-empty">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Developer mode (collapsed by default) -->
+  <div class="dev-section">
+    <div class="dev-toggle" onclick="toggleDev()">
+      <span id="devArrow">&#9654;</span> Developer Mode
+    </div>
+    <div class="dev-content" id="devContent">
+      <div style="font-size:0.65rem; color:var(--cream-dim); margin-bottom:10px;">For custom apps, set these environment variables:</div>
+      <div class="env-line">
+        <div class="env-code" id="envAnthropic">ANTHROPIC_BASE_URL=http://localhost:{{PROXY_PORT}}/anthropic</div>
+        <button class="copy-btn" onclick="copyEnv('envAnthropic', this)">Copy</button>
+      </div>
+      <div class="env-line">
+        <div class="env-code" id="envOpenai">OPENAI_BASE_URL=http://localhost:{{PROXY_PORT}}/openai</div>
+        <button class="copy-btn" onclick="copyEnv('envOpenai', this)">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Authensor Shield v0.1.0</div>
+  <div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let shieldActive = false;
+let devOpen = false;
+
+const APP_ICONS = {
+  'claude-desktop': { cls: 'claude', icon: 'C' },
+  'cursor': { cls: 'cursor', icon: '{' },
+  'windsurf': { cls: 'cursor', icon: 'W' },
+  'vscode': { cls: 'cursor', icon: 'V' },
+  'chatgpt': { cls: 'openai', icon: 'G' },
+  'openai-api': { cls: 'openai', icon: 'O' },
+  'anthropic-api': { cls: 'claude', icon: 'A' },
+};
+
+// DOM refs
+const powerBtn = document.getElementById('powerBtn');
+const statusLabel = document.getElementById('statusLabel');
+const statScanned = document.getElementById('statScanned');
+const statBlocked = document.getElementById('statBlocked');
+const statUptime = document.getElementById('statUptime');
+const activityList = document.getElementById('activityList');
+const appsList = document.getElementById('appsList');
+
+function updateUI(status) {
+  shieldActive = status.active;
+  if (shieldActive) {
+    powerBtn.classList.add('active');
+    statusLabel.textContent = 'Shield Active';
+    statusLabel.className = 'status-label active';
+  } else {
+    powerBtn.classList.remove('active');
+    statusLabel.textContent = 'Shield Off';
+    statusLabel.className = 'status-label inactive';
+  }
+  statScanned.textContent = status.stats.requestsScanned.toLocaleString();
+  statBlocked.textContent = status.stats.threatsBlocked.toLocaleString();
+  statUptime.textContent = formatUptime(status.stats.uptimeSeconds);
+  renderActivity(status.recentActivity);
+}
+
+function formatUptime(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+
+function renderActivity(entries) {
+  if (!entries || entries.length === 0) {
+    activityList.innerHTML = '<div class="activity-empty">No requests yet</div>';
+    return;
+  }
+  activityList.innerHTML = entries.slice(0, 5).map(function(e) {
+    var bc = e.verdict === 'allow' ? 'badge-allow' : 'badge-block';
+    var bt = e.verdict === 'allow' ? 'Allow' : 'Block';
+    var t = new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    return '<div class="activity-item">' +
+      '<span class="badge ' + bc + '">' + bt + '</span>' +
+      '<span class="activity-provider">' + esc(e.provider) + '</span>' +
+      '<span class="activity-path">' + esc(e.path) + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function renderApps(apps) {
+  if (!apps || apps.length === 0) {
+    appsList.innerHTML = '<div class="activity-empty">No supported apps detected</div>';
+    return;
+  }
+  appsList.innerHTML = apps.map(function(app) {
+    var ic = APP_ICONS[app.id] || { cls: 'claude', icon: '?' };
+    var statusText, statusClass, btnHtml;
+
+    if (!app.installed) {
+      statusText = 'Not installed';
+      statusClass = '';
+      btnHtml = '<span class="app-not-found">Not found</span>';
+    } else if (app.protected) {
+      statusText = 'Protected by Shield';
+      statusClass = 'protected';
+      btnHtml = '<button class="app-btn protected" disabled>Protected</button>' +
+        '<button class="app-btn uninstall" onclick="protectApp(\'' + app.id + '\', \'unprotect\')">Remove</button>';
+    } else {
+      statusText = 'Installed, not protected';
+      statusClass = '';
+      btnHtml = '<button class="app-btn protect" onclick="protectApp(\'' + app.id + '\', \'protect\')">Protect</button>';
+    }
+
+    return '<div class="app-card">' +
+      '<div class="app-icon ' + ic.cls + '">' + ic.icon + '</div>' +
+      '<div class="app-info">' +
+        '<div class="app-name">' + esc(app.name) + '</div>' +
+        '<div class="app-status ' + statusClass + '">' + statusText + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' + btnHtml + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function esc(t) {
+  var d = document.createElement('div');
+  d.appendChild(document.createTextNode(t));
+  return d.innerHTML;
+}
+
+async function fetchStatus() {
+  try {
+    var r = await fetch(API + '/api/status');
+    if (r.ok) updateUI(await r.json());
+  } catch(e) {}
+}
+
+async function detectApps() {
+  try {
+    var r = await fetch(API + '/api/detect-apps');
+    if (r.ok) {
+      var data = await r.json();
+      renderApps(data.apps);
+    }
+  } catch(e) {}
+}
+
+async function toggleShield() {
+  try {
+    await fetch(API + '/api/toggle', { method: 'POST' });
+    await fetchStatus();
+  } catch(e) {}
+}
+
+async function protectApp(appId, action) {
+  try {
+    var r = await fetch(API + '/api/protect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId: appId, action: action }),
+    });
+    if (r.ok) {
+      showToast(action === 'protect' ? 'Protection enabled. Restart the app to apply.' : 'Protection removed. Restart the app to apply.');
+      detectApps();
+    }
+  } catch(e) {
+    showToast('Failed. Check console.');
+  }
+}
+
+function toggleDev() {
+  devOpen = !devOpen;
+  document.getElementById('devContent').classList.toggle('show', devOpen);
+  document.getElementById('devArrow').innerHTML = devOpen ? '&#9660;' : '&#9654;';
+}
+
+function copyEnv(id, btn) {
+  var text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 3000);
+}
+
+async function fetchEcosystem() {
+  try {
+    var r = await fetch(API + '/api/ecosystem');
+    if (r.ok) {
+      var data = await r.json();
+      renderEcosystem(data.components);
+    }
+  } catch(e) {}
+}
+
+function renderEcosystem(components) {
+  var el = document.getElementById('ecosystemList');
+  if (!components || components.length === 0) {
+    el.innerHTML = '<div class="activity-empty">No components detected</div>';
+    return;
+  }
+  el.innerHTML = components.map(function(c) {
+    var dotColor = c.status === 'active' ? 'var(--green)' : c.status === 'inactive' ? 'var(--gold)' : 'var(--cream-dim)';
+    var statusText = c.status === 'active' ? 'Active' : c.status === 'inactive' ? 'Paused' : 'Not installed';
+    return '<div class="app-card">' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0"></div>' +
+      '<div class="app-info">' +
+        '<div class="app-name">' + esc(c.name) + '</div>' +
+        '<div class="app-status" style="color:' + dotColor + '">' + esc(c.detail) + '</div>' +
+      '</div>' +
+      '</div>';
+  }).join('');
+}
+
+// Init
+fetchStatus();
+detectApps();
+fetchEcosystem();
+setInterval(fetchStatus, 2000);
+setInterval(detectApps, 10000);
+setInterval(fetchEcosystem, 10000);
+</script>
+</body>
+</html>

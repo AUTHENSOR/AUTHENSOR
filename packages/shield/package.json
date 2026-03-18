@@ -1,0 +1,63 @@
+{
+  "name": "@authensor/shield",
+  "version": "0.1.0",
+  "description": "One-click AI safety proxy with web GUI - a VPN for AI API calls",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "authensor-shield": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/ui"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "start": "node ./dist/cli.js"
+  },
+  "dependencies": {},
+  "optionalDependencies": {
+    "@authensor/aegis": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.1.0"
+  },
+  "keywords": [
+    "authensor",
+    "shield",
+    "proxy",
+    "ai-safety",
+    "ai-proxy",
+    "content-safety",
+    "guardrails",
+    "vpn",
+    "ai-agent",
+    "agentic-ai",
+    "security",
+    "open-source"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authensor/authensor",
+    "directory": "packages/shield"
+  },
+  "homepage": "https://github.com/authensor/authensor",
+  "publishConfig": {
+    "access": "public"
+  }
+}
