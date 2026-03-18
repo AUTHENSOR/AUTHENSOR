@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: authensor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-authensor_dev}
+      POSTGRES_DB: authensor
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authensor"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  authensor-api:
+    image: authensor/control-plane:latest
+    build:
+      context: ..
+      dockerfile: packages/control-plane/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Required
+      DATABASE_URL: postgres://authensor:${POSTGRES_PASSWORD:-authensor_dev}@postgres:5432/authensor
+      PORT: "3000"
+
+      # Bootstrap (set a strong token on first run, then remove it)
+      AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN: ${AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN:-}
+
+      # Safety scanning
+      AUTHENSOR_AEGIS_ENABLED: ${AUTHENSOR_AEGIS_ENABLED:-false}
+      AUTHENSOR_AEGIS_MODE: ${AUTHENSOR_AEGIS_MODE:-warn}
+
+      # Real-time monitoring
+      AUTHENSOR_SENTINEL_ENABLED: ${AUTHENSOR_SENTINEL_ENABLED:-true}
+      AUTHENSOR_SENTINEL_ALERT_WEBHOOK_URL: ${AUTHENSOR_SENTINEL_ALERT_WEBHOOK_URL:-}
+      AUTHENSOR_SENTINEL_ALERT_WEBHOOK_SECRET: ${AUTHENSOR_SENTINEL_ALERT_WEBHOOK_SECRET:-}
+
+      # Policy evaluation
+      AUTHENSOR_ALLOW_FALLBACK_POLICY: ${AUTHENSOR_ALLOW_FALLBACK_POLICY:-false}
+      AUTHENSOR_SHADOW_POLICY_ID: ${AUTHENSOR_SHADOW_POLICY_ID:-}
+      AUTHENSOR_STRICT_PRINCIPAL_BINDING: ${AUTHENSOR_STRICT_PRINCIPAL_BINDING:-false}
+      AUTHENSOR_SKIP_DEFAULT_POLICY: ${AUTHENSOR_SKIP_DEFAULT_POLICY:-}
+      AUTHENSOR_TOCTOU_REEVALUATE: ${AUTHENSOR_TOCTOU_REEVALUATE:-true}
+
+      # Transparency and compliance
+      AUTHENSOR_TRANSPARENCY_ENABLED: ${AUTHENSOR_TRANSPARENCY_ENABLED:-false}
+
+      # Approval workflows
+      AUTHENSOR_APPROVAL_WEBHOOK_URL: ${AUTHENSOR_APPROVAL_WEBHOOK_URL:-}
+      AUTHENSOR_APPROVAL_WEBHOOK_SECRET: ${AUTHENSOR_APPROVAL_WEBHOOK_SECRET:-}
+      AUTHENSOR_APPROVAL_EXPIRY_INTERVAL_MS: ${AUTHENSOR_APPROVAL_EXPIRY_INTERVAL_MS:-60000}
+
+      # Policy alert webhook
+      AUTHENSOR_POLICY_ALERT_WEBHOOK_URL: ${AUTHENSOR_POLICY_ALERT_WEBHOOK_URL:-}
+      AUTHENSOR_POLICY_ALERT_WEBHOOK_SECRET: ${AUTHENSOR_POLICY_ALERT_WEBHOOK_SECRET:-}
+
+      # Rate limiting
+      AUTHENSOR_RL_INGEST_PER_MIN: ${AUTHENSOR_RL_INGEST_PER_MIN:-120}
+      AUTHENSOR_RL_EXECUTOR_PER_MIN: ${AUTHENSOR_RL_EXECUTOR_PER_MIN:-60}
+      AUTHENSOR_RL_ADMIN_PER_MIN: ${AUTHENSOR_RL_ADMIN_PER_MIN:-120}
+      AUTHENSOR_RATE_LIMIT_WEBHOOK_URL: ${AUTHENSOR_RATE_LIMIT_WEBHOOK_URL:-}
+      AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET: ${AUTHENSOR_RATE_LIMIT_WEBHOOK_SECRET:-}
+
+      # Request/response size limits (bytes)
+      AUTHENSOR_MAX_REQUEST_BYTES: ${AUTHENSOR_MAX_REQUEST_BYTES:-256000}
+      AUTHENSOR_MAX_RESULT_BYTES: ${AUTHENSOR_MAX_RESULT_BYTES:-128000}
+
+      # Session management
+      AUTHENSOR_SESSION_TTL_MS: ${AUTHENSOR_SESSION_TTL_MS:-3600000}
+      AUTHENSOR_SESSION_MAX_HISTORY: ${AUTHENSOR_SESSION_MAX_HISTORY:-1000}
+
+      # Receipt claims
+      AUTHENSOR_CLAIM_TTL_SECONDS: ${AUTHENSOR_CLAIM_TTL_SECONDS:-30}
+
+      # Telemetry
+      AUTHENSOR_OTEL_ENABLED: ${AUTHENSOR_OTEL_ENABLED:-false}
+
+      # Proxy trust
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+
+      # Sandbox mode (for testing without auth)
+      AUTHENSOR_SANDBOX_MODE: ${AUTHENSOR_SANDBOX_MODE:-}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
