@@ -6,7 +6,7 @@
 #   AUTHENSOR_AEGIS_ENABLED=true
 #   AUTHENSOR_SENTINEL_ENABLED=true
 
-FROM node:20-alpine AS base
+FROM node:25-alpine AS base
 RUN corepack enable && apk add --no-cache curl
 
 # Install dependencies
