@@ -97,12 +97,12 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 ```
 +---------------------------------------------------------------------+
 |                           Your Agent                                |
-|  (Claude, GPT, LangChain, CrewAI, Vercel AI, custom, etc.)         |
+|  (Claude, GPT, LangChain, CrewAI, Vercel AI, custom, etc.)          |
 +----------------------------------+----------------------------------+
                                    | SDK / MCP / Hook
                                    v
 +---------------------------------------------------------------------+
-|                          Authensor Stack                             |
+|                          Authensor Stack                            |
 |                                                                     |
 |  +------------+  +------------+  +------------+  +--------------+   |
 |  |   Aegis    |->|   Engine   |->|  Control   |->|   Sentinel   |   |
