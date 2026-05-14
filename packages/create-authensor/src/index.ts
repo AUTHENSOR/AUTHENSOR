@@ -1208,12 +1208,19 @@ async function main(): Promise<void> {
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
-  ${BOLD}@authensor/create-authensor${RESET} \u2014 The open-source safety stack for AI agents
+  ${BOLD}@authensor/create-authensor${RESET} -- The open-source safety stack for AI agents
 
   ${DIM}Usage:${RESET}
     npx @authensor/create-authensor              Interactive wizard
     npx @authensor/create-authensor my-agent     Pre-fill project name
-    npx @authensor/create-authensor --help       Show this help
+    npx @authensor/create-authensor --stack       Full stack quick-start
+    npx @authensor/create-authensor --tool aegis  Single tool install guide
+    npx @authensor/create-authensor --help        Show this help
+
+  ${DIM}Modes:${RESET}
+    (default)     Interactive wizard -- pick framework, get full scaffold
+    --stack       Quick-start with @authensor/stack (one package, all tools)
+    --tool NAME   Single tool (aegis, sentinel, engine, stack, mcp, redteam)
 
   ${DIM}The wizard asks 3 questions, then generates a fully working
   TypeScript agent with Authensor safety and the scary demo.${RESET}
@@ -1222,14 +1229,111 @@ async function main(): Promise<void> {
   }
 
   if (args.includes('--version') || args.includes('-v')) {
-    console.log('1.5.0');
+    console.log('1.6.0');
+    process.exit(0);
+  }
+
+  // ── Single-tool mode: npx create-authensor --tool aegis ────────────
+  const toolFlagIdx = args.indexOf('--tool');
+  if (toolFlagIdx !== -1) {
+    const toolName = args[toolFlagIdx + 1];
+    const validTools: Record<string, { pkg: string; description: string }> = {
+      aegis: { pkg: '@authensor/aegis', description: 'Content safety scanner' },
+      sentinel: { pkg: '@authensor/sentinel', description: 'Behavioral monitor' },
+      engine: { pkg: '@authensor/engine', description: 'Policy engine' },
+      stack: { pkg: '@authensor/stack', description: 'Full safety stack' },
+      mcp: { pkg: '@authensor/mcp-server', description: 'MCP Gateway' },
+      redteam: { pkg: '@authensor/redteam', description: 'Red team harness' },
+    };
+
+    if (!toolName || !validTools[toolName]) {
+      console.log(`\n  ${RED}Unknown tool: ${toolName ?? '(none)'}${RESET}`);
+      console.log(`\n  ${DIM}Available tools:${RESET}`);
+      for (const [name, info] of Object.entries(validTools)) {
+        console.log(`    ${BOLD}${name}${RESET}  ${DIM}${info.description}${RESET}  ${CYAN}npm install ${info.pkg}${RESET}`);
+      }
+      console.log('');
+      process.exit(1);
+    }
+
+    const tool = validTools[toolName]!;
+    console.log(`\n  ${GREEN}✓${RESET} Install ${BOLD}${tool.pkg}${RESET}:\n`);
+    console.log(`    npm install ${tool.pkg}\n`);
+    console.log(`  ${DIM}Or get everything:${RESET}  npx @authensor/create-authensor my-agent\n`);
+    process.exit(0);
+  }
+
+  // ── Stack mode: npx create-authensor --stack ───────────────────────
+  if (args.includes('--stack')) {
+    const projectName = args.find((a) => !a.startsWith('-')) ?? 'my-safe-agent';
+    const dir = resolve(process.cwd(), projectName);
+
+    intro(`${BOLD}Authensor${RESET} — Full Safety Stack`);
+
+    const s = spinner();
+    s.start('Scaffolding full safety stack...');
+
+    ensureDir(dir);
+
+    const stackPkgJson = JSON.stringify({
+      name: projectName,
+      version: '0.0.1',
+      type: 'module',
+      scripts: {
+        dev: 'tsx src/index.ts',
+        start: 'tsx src/index.ts',
+        build: 'tsc',
+      },
+      dependencies: {
+        '@authensor/stack': 'latest',
+      },
+      devDependencies: {
+        typescript: '^5.3.0',
+        '@types/node': '^20.10.0',
+        tsx: '^4.7.0',
+      },
+    }, null, 2) + '\n';
+
+    const stackMain = `import { AuthensorStack } from '@authensor/stack';
+
+const stack = AuthensorStack.create({
+  onAlert: (alert) => console.log('[ALERT]', alert.rule, alert.severity),
+  onAnomaly: (anomaly) => console.log('[ANOMALY]', anomaly.metric, anomaly.zscore),
+});
+
+// Content scanning
+const scan = stack.scan("user input goes here");
+console.log('Scan result:', scan.blocked ? 'BLOCKED' : 'CLEAN');
+
+// Policy guard (scan + evaluate in one call)
+const { allowed, reason } = stack.guard(
+  'file.read',
+  '/workspace/config.json',
+  [],   // your policies here
+  { content: "user input" },
+);
+console.log('Guard:', allowed ? 'ALLOWED' : \`DENIED: \${reason}\`);
+`;
+
+    write(dir, 'package.json', stackPkgJson);
+    write(dir, 'tsconfig.json', genTsConfig());
+    write(dir, 'src/index.ts', stackMain);
+    write(dir, '.gitignore', genGitignore());
+
+    s.stop(`${GREEN}✓${RESET} Created ${projectName}/ with @authensor/stack`);
+
+    console.log(`\n  ${BOLD}Next steps:${RESET}`);
+    console.log(`    cd ${projectName} && npm install`);
+    console.log(`    npm run dev\n`);
+
+    outro(`${DIM}Full docs: https://authensor.com/docs${RESET}`);
     process.exit(0);
   }
 
   // Pre-filled project name from CLI arg (non-flag argument)
   const cliName = args.find((a) => !a.startsWith('-'));
 
-  intro(`${BOLD}Authensor${RESET} \u2014 The open-source safety stack for AI agents`);
+  intro(`${BOLD}Authensor${RESET} -- The open-source safety stack for AI agents`);
 
   // ── Prompt 1: Project name ──────────────────────────────────────────
   const rawName = await text({

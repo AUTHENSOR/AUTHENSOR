@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16213e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a2e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="aegisGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e94560;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c23152;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="engineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#533483;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3d2466;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sentinelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a2647;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cpGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#205375;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#163a54;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="adapterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2c3333;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a2222;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="520" rx="12" fill="#0d1117"/>
+
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="600">Authensor Safety Stack</text>
+  <text x="400" y="52" text-anchor="middle" fill="#7d8590" font-size="11">Every agent action flows through seven layers before execution</text>
+
+  <!-- YOUR AGENT box at top -->
+  <rect x="240" y="68" width="320" height="42" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="400" y="85" text-anchor="middle" fill="#7d8590" font-size="10">YOUR AGENT</text>
+  <text x="400" y="100" text-anchor="middle" fill="#e6edf3" font-size="11">Claude / GPT / LangChain / CrewAI / Vercel AI / Custom</text>
+
+  <!-- Arrow down -->
+  <line x1="400" y1="110" x2="400" y2="130" stroke="#30363d" stroke-width="2"/>
+  <polygon points="394,128 400,138 406,128" fill="#30363d"/>
+  <text x="412" y="127" fill="#7d8590" font-size="9">Action Envelope</text>
+
+  <!-- Layer 1: Aegis -->
+  <rect x="40" y="142" width="170" height="80" rx="10" fill="url(#aegisGrad)" filter="url(#shadow)"/>
+  <text x="125" y="163" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Aegis</text>
+  <text x="125" y="178" text-anchor="middle" fill="#ffb3c1" font-size="9">Content Scanner</text>
+  <line x1="50" y1="186" x2="200" y2="186" stroke="#ffb3c1" stroke-opacity="0.3" stroke-width="0.5"/>
+  <text x="125" y="200" text-anchor="middle" fill="#e6c7ce" font-size="8.5">Injection  |  PII  |  Creds</text>
+  <text x="125" y="213" text-anchor="middle" fill="#e6c7ce" font-size="8.5">Exfil  |  Memory Poisoning</text>
+  <text x="52" y="162" fill="#ffb3c1" font-size="8" font-weight="600">01</text>
+
+  <!-- Layer 2: Engine -->
+  <rect x="225" y="142" width="170" height="80" rx="10" fill="url(#engineGrad)" filter="url(#shadow)"/>
+  <text x="310" y="163" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Engine</text>
+  <text x="310" y="178" text-anchor="middle" fill="#d4b3e6" font-size="9">Policy Evaluation</text>
+  <line x1="235" y1="186" x2="385" y2="186" stroke="#d4b3e6" stroke-opacity="0.3" stroke-width="0.5"/>
+  <text x="310" y="200" text-anchor="middle" fill="#d4c5e0" font-size="8.5">Conditions  |  Rules  |  Budgets</text>
+  <text x="310" y="213" text-anchor="middle" fill="#d4c5e0" font-size="8.5">Sessions  |  Rate Limits</text>
+  <text x="237" y="162" fill="#d4b3e6" font-size="8" font-weight="600">02</text>
+
+  <!-- Layer 3: Control Plane -->
+  <rect x="410" y="142" width="170" height="80" rx="10" fill="url(#cpGrad)" filter="url(#shadow)"/>
+  <text x="495" y="163" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Control Plane</text>
+  <text x="495" y="178" text-anchor="middle" fill="#87b5d6" font-size="9">HTTP API + PostgreSQL</text>
+  <line x1="420" y1="186" x2="570" y2="186" stroke="#87b5d6" stroke-opacity="0.3" stroke-width="0.5"/>
+  <text x="495" y="200" text-anchor="middle" fill="#a8c8df" font-size="8.5">RBAC  |  Approvals  |  Keys</text>
+  <text x="495" y="213" text-anchor="middle" fill="#a8c8df" font-size="8.5">Shadow Eval  |  Dashboard</text>
+  <text x="422" y="162" fill="#87b5d6" font-size="8" font-weight="600">03</text>
+
+  <!-- Layer 4: Sentinel -->
+  <rect x="595" y="142" width="170" height="80" rx="10" fill="url(#sentinelGrad)" filter="url(#shadow)"/>
+  <text x="680" y="163" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Sentinel</text>
+  <text x="680" y="178" text-anchor="middle" fill="#6fa3d6" font-size="9">Behavioral Monitor</text>
+  <line x1="605" y1="186" x2="755" y2="186" stroke="#6fa3d6" stroke-opacity="0.3" stroke-width="0.5"/>
+  <text x="680" y="200" text-anchor="middle" fill="#96bbdb" font-size="8.5">EWMA  |  CUSUM  |  Baselines</text>
+  <text x="680" y="213" text-anchor="middle" fill="#96bbdb" font-size="8.5">Chain Depth  |  Cost Alerts</text>
+  <text x="607" y="162" fill="#6fa3d6" font-size="8" font-weight="600">04</text>
+
+  <!-- Arrows between layers -->
+  <line x1="210" y1="182" x2="225" y2="182" stroke="#30363d" stroke-width="1.5"/>
+  <polygon points="222,179 228,182 222,185" fill="#30363d"/>
+  <line x1="395" y1="182" x2="410" y2="182" stroke="#30363d" stroke-width="1.5"/>
+  <polygon points="407,179 413,182 407,185" fill="#30363d"/>
+  <line x1="580" y1="182" x2="595" y2="182" stroke="#30363d" stroke-width="1.5"/>
+  <polygon points="592,179 598,182 592,185" fill="#30363d"/>
+
+  <!-- Decision diamond -->
+  <polygon points="400,245 440,270 400,295 360,270" fill="#161b22" stroke="#e94560" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="400" y="267" text-anchor="middle" fill="#e94560" font-size="8" font-weight="600">ALLOW?</text>
+  <text x="400" y="278" text-anchor="middle" fill="#e94560" font-size="7">DENY?</text>
+
+  <!-- Arrow from Aegis down to diamond -->
+  <line x1="400" y1="222" x2="400" y2="245" stroke="#30363d" stroke-width="1.5"/>
+  <polygon points="394,242 400,248 406,242" fill="#30363d"/>
+
+  <!-- Receipts box -->
+  <rect x="140" y="310" width="200" height="65" rx="10" fill="#161b22" stroke="#3fb950" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="240" y="332" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="600">Receipts</text>
+  <text x="240" y="347" text-anchor="middle" fill="#7d8590" font-size="9">Hash-Chained Audit Trail</text>
+  <text x="240" y="363" text-anchor="middle" fill="#7d8590" font-size="8.5">SHA-256 chain  |  Sigstore  |  Tamper-evident</text>
+  <text x="152" y="332" fill="#3fb950" font-size="8" font-weight="600">05</text>
+
+  <!-- Approval box -->
+  <rect x="460" y="310" width="200" height="65" rx="10" fill="#161b22" stroke="#d29922" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="560" y="332" text-anchor="middle" fill="#d29922" font-size="12" font-weight="600">Approvals</text>
+  <text x="560" y="347" text-anchor="middle" fill="#7d8590" font-size="9">Human-in-the-Loop</text>
+  <text x="560" y="363" text-anchor="middle" fill="#7d8590" font-size="8.5">Multi-party  |  Expiring  |  TOCTOU-safe</text>
+  <text x="472" y="332" fill="#d29922" font-size="8" font-weight="600">06</text>
+
+  <!-- Arrows from diamond -->
+  <line x1="380" y1="282" x2="280" y2="310" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="310" y="293" fill="#3fb950" font-size="8">allow / deny</text>
+  <line x1="420" y1="282" x2="520" y2="310" stroke="#d29922" stroke-width="1.5"/>
+  <text x="450" y="293" fill="#d29922" font-size="8">require_approval</text>
+
+  <!-- MCP Gateway bar -->
+  <rect x="140" y="395" width="520" height="45" rx="10" fill="#161b22" stroke="#8b949e" stroke-width="1" filter="url(#shadow)"/>
+  <text x="400" y="415" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">MCP Gateway</text>
+  <text x="400" y="430" text-anchor="middle" fill="#7d8590" font-size="9">Policy enforcement for MCP server tool calls  |  SEP authorization protocol</text>
+  <text x="152" y="415" fill="#8b949e" font-size="8" font-weight="600">07</text>
+
+  <!-- Arrow down to MCP -->
+  <line x1="240" y1="375" x2="240" y2="395" stroke="#30363d" stroke-width="1.5"/>
+  <line x1="560" y1="375" x2="560" y2="395" stroke="#30363d" stroke-width="1.5"/>
+
+  <!-- Framework adapters bar at bottom -->
+  <rect x="40" y="460" width="720" height="40" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="60" y="484" fill="#7d8590" font-size="9" font-weight="600">ADAPTERS</text>
+  <text x="150" y="484" fill="#58a6ff" font-size="9">LangChain</text>
+  <text x="240" y="484" fill="#58a6ff" font-size="9">OpenAI</text>
+  <text x="315" y="484" fill="#58a6ff" font-size="9">CrewAI</text>
+  <text x="390" y="484" fill="#58a6ff" font-size="9">Vercel AI</text>
+  <text x="475" y="484" fill="#58a6ff" font-size="9">Claude SDK</text>
+  <text x="570" y="484" fill="#58a6ff" font-size="9">Claude Code</text>
+  <text x="665" y="484" fill="#58a6ff" font-size="9">Python SDK</text>
+
+  <!-- Zero deps badges -->
+  <rect x="155" y="228" width="50" height="14" rx="3" fill="#238636" fill-opacity="0.2" stroke="#238636" stroke-width="0.5"/>
+  <text x="180" y="238" text-anchor="middle" fill="#3fb950" font-size="7">0 deps</text>
+  <rect x="340" y="228" width="50" height="14" rx="3" fill="#238636" fill-opacity="0.2" stroke="#238636" stroke-width="0.5"/>
+  <text x="365" y="238" text-anchor="middle" fill="#3fb950" font-size="7">0 deps</text>
+  <rect x="710" y="228" width="50" height="14" rx="3" fill="#238636" fill-opacity="0.2" stroke="#238636" stroke-width="0.5"/>
+  <text x="735" y="238" text-anchor="middle" fill="#3fb950" font-size="7">0 deps</text>
+</svg>

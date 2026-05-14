@@ -311,11 +311,10 @@ importers:
         version: 5.9.3
 
   packages/engine:
-    dependencies:
+    devDependencies:
       '@authensor/schemas':
         specifier: workspace:*
         version: link:../schemas
-    devDependencies:
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.27
@@ -433,6 +432,28 @@ importers:
       vitest:
         specifier: ^1.1.0
         version: 1.6.1(@types/node@20.19.27)
+
+  packages/stack:
+    dependencies:
+      '@authensor/aegis':
+        specifier: workspace:*
+        version: link:../aegis
+      '@authensor/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@authensor/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@authensor/sentinel':
+        specifier: workspace:*
+        version: link:../sentinel
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.27
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
 packages:
 
