@@ -1,47 +1,76 @@
 <p align="center">
-  <strong>Authensor</strong><br>
-  The open-source safety stack for AI agents. Enterprise-grade protection, completely free.
+  <img src=".github/assets/logo.svg" alt="Authensor" width="360">
 </p>
 
 <p align="center">
-  <em>Every agent action evaluated. Every decision auditable. Every tool governed.</em>
+  <strong>Open-source safety stack for AI agents.</strong><br>
+  <em>Gate every tool call. Scan every input. Monitor every session. Audit everything.</em>
 </p>
 
 <p align="center">
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
-  </a>
-  <a href="https://github.com/authensor/authensor/actions">
-    <img src="https://img.shields.io/badge/tests-1%2C148%2B%20passing-brightgreen.svg" alt="Tests: 1,148+ passing">
-  </a>
-  <a href="https://www.npmjs.com/org/authensor">
-    <img src="https://img.shields.io/badge/npm-%40authensor-red.svg" alt="npm: @authensor">
-  </a>
-  <a href="docs/owasp-agentic-alignment.md">
-    <img src="https://img.shields.io/badge/OWASP-10%2F10%20coverage-green.svg" alt="OWASP: 10/10 coverage">
-  </a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/authensor/authensor/actions"><img src="https://img.shields.io/badge/tests-1%2C148%2B%20passing-brightgreen.svg" alt="Tests: 1,148+ passing"></a>
+  <a href="https://www.npmjs.com/org/authensor"><img src="https://img.shields.io/badge/npm-%40authensor-red.svg" alt="npm: @authensor"></a>
+  <a href="docs/owasp-agentic-alignment.md"><img src="https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10-green.svg" alt="OWASP: 10/10 coverage"></a>
+  <a href="docs/eu-ai-act-compliance.md"><img src="https://img.shields.io/badge/EU_AI_Act-aligned-blue.svg" alt="EU AI Act aligned"></a>
+  <img src="https://img.shields.io/badge/zero_deps-core_packages-238636.svg" alt="Zero dependencies">
 </p>
 
-<p align="center">
-  <a href="#try-it-in-30-seconds">Try It</a> &middot;
-  <a href="#authensor-vs-the-alternatives">Compare</a> &middot;
-  <a href="#architecture">Architecture</a> &middot;
-  <a href="#packages">Packages</a> &middot;
-  <a href="#framework-adapters">Adapters</a> &middot;
-  <a href="#owasp-agentic-top-10-coverage">OWASP</a> &middot;
-  <a href="docs/eu-ai-act-compliance.md">EU AI Act</a>
-</p>
-
----
-
-## Try It in 30 Seconds
+<br>
 
 ```bash
 npx @authensor/create-authensor my-agent
 cd my-agent && npm install && npm run demo
 ```
 
-See what happens when an AI agent runs without safety guardrails — then see Authensor stop the dangerous actions. The demo simulates an agent attempting destructive file operations, unauthorized API calls, and data exfiltration, and shows each one being caught by Authensor's policy engine, content scanner, and approval workflows.
+<p align="center">
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#the-free-safety-stack">Why Free</a> &middot;
+  <a href="#quickstart">Quickstart</a> &middot;
+  <a href="#packages">Packages</a> &middot;
+  <a href="#owasp-agentic-top-10-coverage">OWASP</a> &middot;
+  <a href="#compliance">Compliance</a> &middot;
+  <a href="#adversarial-red-teaming">Red Teaming</a>
+</p>
+
+---
+
+## Architecture
+
+<p align="center">
+  <img src=".github/assets/architecture.svg" alt="Authensor Architecture" width="800">
+</p>
+
+Every agent action (tool call, API request, file write, message send) is wrapped in an **action envelope** and evaluated through seven layers before execution. No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. Fail-closed by default.
+
+---
+
+## Two Sides of the Same Problem
+
+**Free safety stack.** Policy engine, content scanner, behavioral monitor, cryptographic audit trail, approval workflows. MIT-licensed, self-hostable, zero vendor lock-in. Deploy it, protect your agents, pay nothing.
+
+**Frontier adversarial red teaming.** The same methodology that produced 350+ verified vulnerabilities across 168+ repos at NVIDIA, Microsoft, Meta, Google, HuggingFace, and 50+ other organizations. Two novel vulnerability classes discovered. We break your system before someone else does.
+
+We open-source the defense because safety tooling shouldn't have a paywall. We sell the offense because finding out your system breaks *after* deployment costs more.
+
+<details>
+<summary><strong>Full track record</strong></summary>
+
+- **168+ repos audited** across NVIDIA, Microsoft, Meta, Google, HuggingFace, OpenAI, and 50+ organizations
+- **350+ verified vulnerabilities**, 126 responsible disclosure reports prepared
+- **2 novel vulnerability classes**: SafeTensors Bypass (pickle inside "safe" model files) and AST Sandbox Escape via allowed library semantics
+- **Critical findings** in PyTorch core, DeepSpeed, BentoML, TorchServe, Ray, Ollama, vLLM, LangChain, Gradio, NVIDIA Triton, and dozens more
+- Security fix merged into UK AISI's ControlArena ([PR #798](https://github.com/UKGovernmentBEIS/control-arena/pull/798))
+- Found that NVIDIA's NeMo Guardrails loads its jailbreak classifier via `pickle.load()`
+- Found SQL injection in Microsoft's AI red teaming tool (PyRIT)
+
+</details>
+
+---
+
+## Try It in 30 Seconds
+
+The demo runs an agent that attempts destructive file operations, unauthorized API calls, and data exfiltration. Authensor catches each one through policy enforcement, content scanning, and approval workflows.
 
 ### One-Click Deploy
 
@@ -50,82 +79,23 @@ See what happens when an AI agent runs without safety guardrails — then see Au
 
 ---
 
-## Authensor vs the Alternatives
+## The Free Safety Stack
 
-Every feature below is free and self-hostable with Authensor. No usage-based pricing. No enterprise sales calls.
+Everything below is open-source, self-hostable, MIT-licensed. No usage-based pricing. No enterprise sales calls. No feature gates.
 
-| Feature | Authensor (Free) | Enterprise Tools | What you'd pay elsewhere |
-|---|---|---|---|
-| **Policy Engine** | ✅ | ✅ | $0.000025/req (AWS) or enterprise contract |
-| **Approval Workflows** | ✅ | ❌ most lack this | Custom build ($50K+) |
-| **Cryptographic Audit Trail** | ✅ Hash-chained receipts | ❌ | Custom build |
-| **Content Safety Scanner** | ✅ Aegis (zero-dep) | Partial | $10K+/yr (Lakera, etc.) |
-| **MCP Tool Governance** | ✅ | ❌ most lack this | Doesn't exist elsewhere |
-| **Real-Time Anomaly Detection** | ✅ Sentinel | ❌ | $15K+/yr |
-| **Framework Agnostic** | ✅ 8 adapters | Vendor-locked | N/A |
-| **Self-Hosted** | ✅ Docker Compose | Sometimes | N/A |
-| **Fail-Closed Default** | ✅ No policy = deny | ❌ most fail-open | N/A |
-| **Budget Enforcement** | ✅ | ❌ | Custom build |
-| **Session Threat Detection** | ✅ | ❌ | Custom build |
+| Layer | What It Does | Elsewhere |
+|---|---|---|
+| **Policy Engine** | Action-level authorization, conditions, rate limits, budgets | $0.000025/req (AWS) or enterprise contract |
+| **Aegis Content Scanner** | Prompt injection, jailbreak, PII, memory poisoning detection (zero-dep) | $10K+/yr (Lakera, etc.) |
+| **Sentinel Monitor** | Per-agent behavioral baselines, EWMA/CUSUM anomaly detection | $15K+/yr |
+| **Approval Workflows** | Human-in-the-loop for high-consequence actions | Custom build ($50K+) |
+| **Cryptographic Audit Trail** | Hash-chained receipts, Sigstore transparency log integration | Custom build |
+| **MCP Tool Governance** | Policy enforcement for MCP server tool calls | Doesn't exist elsewhere |
+| **8 Framework Adapters** | LangChain, OpenAI, CrewAI, Vercel AI, Claude, vanilla TS/Python | Vendor-locked |
 
-**Enterprise-grade agent safety shouldn't require an enterprise contract.** Authensor gives you everything above — policy engine, approval workflows, tamper-evident audit trails, content scanning, MCP governance, anomaly detection — for free. Self-host it, or use the hosted tier for $5/mo.
+We open-source all of this because safety tooling shouldn't have a paywall. The more people who deploy proper agent governance, the safer the ecosystem gets for everyone.
 
 ---
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Your Agent                                    │
-│  (Claude, GPT, LangChain, CrewAI, Vercel AI, custom, etc.)           │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ SDK / MCP / Hook
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Authensor Stack                                │
-│                                                                       │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────────┐   │
-│  │   Aegis    │→ │   Engine   │→ │  Control   │→ │  Sentinel    │   │
-│  │  (content  │  │   (pure    │  │   Plane    │  │  (real-time  │   │
-│  │   safety)  │  │   logic)   │  │  (HTTP API)│  │  monitoring) │   │
-│  └────────────┘  └────────────┘  └─────┬──────┘  └──────────────┘   │
-│                                        │                              │
-│  ┌────────────┐  ┌────────────┐  ┌─────▼──────┐  ┌──────────────┐   │
-│  │  SafeClaw  │  │ SpiroGrapher│  │  Receipts  │  │   Adapters   │   │
-│  │(local gate)│  │(web govern) │  │(hash chain)│  │(8 adapters)  │   │
-│  └────────────┘  └────────────┘  └────────────┘  └──────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### How It Works
-
-```
-Agent wants to act
-  │
-  ▼
-Action Envelope created (who, what, where, constraints)
-  │
-  ▼
-Aegis scans for injection, jailbreak, PII, memory poisoning
-  │
-  ▼
-Session rules check forbidden sequences + risk threshold
-  │
-  ▼
-Policy engine evaluates conditions, rate limits, budgets
-  │
-  ▼
-Decision: allow | deny | require_approval | rate_limited
-  │
-  ▼
-Receipt created (hash-chained, policy-versioned)
-  │
-  ▼
-Sentinel monitors for anomalies
-  │
-  ▼
-Action executes (or doesn't) → receipt updated
-```
 
 ### Five Layers
 
@@ -143,7 +113,7 @@ Action executes (or doesn't) → receipt updated
 
 | Package | Description | Deps |
 |---------|-------------|------|
-| `@authensor/schemas` | JSON Schema definitions — single source of truth | 0 |
+| `@authensor/schemas` | JSON Schema definitions -- single source of truth | 0 |
 | `@authensor/engine` | Pure policy evaluation (conditions, sessions, budgets, constraints) | 0 |
 | `@authensor/aegis` | Content safety scanner (injection, jailbreak, PII, memory poisoning, multimodal) | 0 |
 | `@authensor/sentinel` | Real-time monitoring (EWMA/CUSUM anomaly detection, chain tracking, alerts) | 0 |
@@ -175,7 +145,7 @@ Action executes (or doesn't) → receipt updated
 | [SafeClaw](https://github.com/authensor/safeclaw) | Local agent gating with PreToolUse hooks, mobile PWA dashboard, swipe-to-approve |
 | [SpiroGrapher](https://github.com/authensor/spirographer) | Web governance: HTML to IR compilation, 26 constitutional rules, dark pattern detection |
 | [SiteSitter](https://github.com/AUTHENSOR/SiteSitter) | Website safety monitoring and governance |
-| [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) | Adversarial red-teaming for AI agents — multi-step attack chains, MITRE ATLAS mapped, 15-dimension CBS scoring |
+| [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) | Adversarial red-teaming for AI agents -- multi-step attack chains, MITRE ATLAS mapped, 15-dimension CBS scoring |
 
 ## Quickstart
 
@@ -252,46 +222,41 @@ import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
 // See docs/claude-code-hooks.md
 ```
 
-## Key Differentiators
+## Why Authensor
 
-1. **Action-level, not prompt-level.** Most guardrails filter what the model says. Authensor governs what the agent *does* — every tool call, API request, and side effect goes through policy evaluation before execution.
+1. **Defense and offense, same team.** The safety stack is free. The adversarial testing that proves it holds (or shows where it doesn't) is the service.
 
-2. **Defense in depth.** Seven layers of safety in one stack:
-   - **Aegis** scans for prompt injection, jailbreak, PII, and memory poisoning *before* policy evaluation
-   - **Session rules** detect privilege escalation through action sequences and cumulative risk scoring
-   - **Policy engine** evaluates conditions, constraints, rate limits, and budgets
-   - **Approval workflows** force human review for high-consequence actions
-   - **Sentinel** monitors per-agent baselines and detects anomalies in real-time
-   - **Receipts** create a tamper-evident audit trail with hash chains and optional Sigstore transparency
-   - **TOCTOU protection** re-evaluates policy on claim to prevent time-of-check/time-of-use attacks
+2. **Action-level governance.** Not prompt filtering. Authensor evaluates what the agent *does*: every tool call, API request, and side effect goes through policy before execution.
 
-3. **Receipts, not just logs.** Every action produces a structured, policy-versioned receipt recording what was requested, what policy decided, why, and what happened. Hash-chained for tamper evidence. This directly satisfies EU AI Act Article 12 (record-keeping) and SOX audit requirements.
+3. **Research-validated.** 350+ verified vulnerabilities across 168+ repos. Two novel vulnerability classes. We broke PyTorch, DeepSpeed, BentoML, TorchServe, and the tools built to secure AI (NeMo Guardrails, PyRIT, Garak). When we test yours, we test at that depth.
 
-4. **Fail-closed by default.** No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. This matches OWASP and NIST recommendations.
+4. **Seven layers.** Aegis content scanning, session rules, policy engine, approval workflows, Sentinel behavioral monitoring, hash-chained receipts, TOCTOU protection.
 
-5. **Cross-provider.** Works with Claude, GPT, LangChain, CrewAI, Vercel AI, Claude Code, or any agent framework. Eight adapters, one safety layer for all your agents.
+5. **Fail-closed.** No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied.
 
-6. **Completely free.** Self-host the entire stack at no cost. No usage-based pricing, no feature gates, no enterprise tier required for core safety features. Optional hosted tier at $5/month for teams that want managed infrastructure.
+6. **Cross-provider.** Claude, GPT, LangChain, CrewAI, Vercel AI, Claude Code, or any framework. One safety layer, all your agents.
+
+7. **Free stack, paid testing.** Self-host everything at no cost. No usage-based pricing, no feature gates on safety. Revenue comes from adversarial testing services, not from gating the defense.
 
 ## Features
 
 ### Content Safety (Aegis)
 
 Zero-dependency content scanner that runs *before* policy evaluation:
-- **Prompt injection detection** — 15+ heuristic rules
-- **Jailbreak detection** — pattern matching for common bypass techniques
-- **PII detection** — emails, SSNs, credit cards, phone numbers
-- **Memory poisoning detection** — 22 MINJA-informed rules for persistent memory attacks
-- **Multimodal safety** — 6 heuristic categories for image/file content
-- **Output scanning** — post-execution content validation
+- **Prompt injection detection** -- 15+ heuristic rules
+- **Jailbreak detection** -- pattern matching for common bypass techniques
+- **PII detection** -- emails, SSNs, credit cards, phone numbers
+- **Memory poisoning detection** -- 22 MINJA-informed rules for persistent memory attacks
+- **Multimodal safety** -- 6 heuristic categories for image/file content
+- **Output scanning** -- post-execution content validation
 
 ### Session Rules
 
 Detect privilege escalation through multi-action patterns:
-- **Forbidden sequences** — block `[auth.login, admin.escalate]` chains with glob matching
-- **Risk scoring** — cumulative per-session risk with configurable weights
-- **Max actions** — cap total actions per session
-- **Lookback windows** — configurable history depth for sequence matching
+- **Forbidden sequences** -- block `[auth.login, admin.escalate]` chains with glob matching
+- **Risk scoring** -- cumulative per-session risk with configurable weights
+- **Max actions** -- cap total actions per session
+- **Lookback windows** -- configurable history depth for sequence matching
 
 ### Budget Enforcement
 
@@ -307,7 +272,7 @@ Zero-dependency anomaly detection engine:
 - **Per-agent baselines** via EWMA (Exponentially Weighted Moving Average)
 - **CUSUM change detection** for gradual behavioral drift
 - **Configurable alerts** on deny rate, latency, cost, chain depth, and fan-out
-- **Cross-agent chain tracking** — depth and fan-out metrics for delegation chains
+- **Cross-agent chain tracking** -- depth and fan-out metrics for delegation chains
 
 ### Shadow/Canary Policy Testing
 
@@ -318,12 +283,12 @@ Test new policies alongside active ones without enforcement:
 
 ### Transparency & Compliance
 
-- **Hash-chained receipts** — SHA-256 chain makes audit trail tamper-evident
-- **Sigstore/Rekor integration** — optional publishing to public transparency log
-- **Cross-agent tracing** — `parentReceiptId` links receipts across delegation chains
-- **TOCTOU protection** — re-evaluates policy on claim to prevent stale-approval attacks
-- **Principal binding** — bind API keys to specific agent identities
-- **OpenTelemetry** — spans and metrics for every evaluation
+- **Hash-chained receipts** -- SHA-256 chain makes audit trail tamper-evident
+- **Sigstore/Rekor integration** -- optional publishing to public transparency log
+- **Cross-agent tracing** -- `parentReceiptId` links receipts across delegation chains
+- **TOCTOU protection** -- re-evaluates policy on claim to prevent stale-approval attacks
+- **Principal binding** -- bind API keys to specific agent identities
+- **OpenTelemetry** -- spans and metrics for every evaluation
 
 ## OWASP Agentic Top 10 Coverage
 
@@ -354,30 +319,58 @@ Authensor's architecture maps directly to major regulatory requirements:
 - **HIPAA**: Action-level audit logging, access controls, principal binding
 - **NIST AI RMF**: Govern, Map, Measure, Manage pillars addressed via policies, receipts, and controls
 
-## Red-Team Your Safety
+## Adversarial Red Teaming
 
-Authensor is the defense layer. [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) is the offense layer. Together they close the loop.
+Defense without testing is hope.
+
+Proprietary automated pipeline. Same methodology that produced 350+ verified vulnerabilities across 168+ repos at NVIDIA, Microsoft, Meta, Google, HuggingFace, OpenAI, and 50+ other organizations. Two novel vulnerability classes discovered.
 
 ```
-Build agent → Protect with Authensor → Test with Chainbreaker → Improve → Ship
-                      ▲                           │
-                      └───── findings → Aegis ────┘
+Your AI system
+      │
+      ▼
+Authensor Red Team Pipeline
+      │
+      ├── Static + dynamic analysis (custom rules, not off-the-shelf)
+      ├── ML-specific vulnerability detection
+      ├── Multi-signal correlation and attack chain discovery
+      └── Automated triage + false positive elimination
+      │
+      ▼
+CVE-quality output
+      │
+      ├── Verified findings with reproduction steps
+      ├── CVSS scoring with exploitability assessment
+      ├── Remediation recommendations
+      └── PR patches where applicable
 ```
 
-**Defense without testing is hope, not safety.** Authensor governs every action at runtime — but you need to know whether an adversary can bypass it. Chainbreaker is purpose-built for that.
+### What Gets Tested
 
-### Chainbreaker — Burp Suite for AI Agents
+| Target | What We Find |
+|--------|-------------|
+| **ML infrastructure** | Deserialization, injection, auth bypass, model format exploits |
+| **AI agents** | Policy bypasses, tool misuse, exfiltration, privilege escalation |
+| **Safety & evaluation tools** | Guardrail bypass, sandbox escape, monitor evasion, evaluation framework vulnerabilities |
+| **Native code** | Memory corruption in inference engines |
+| **Supply chain** | Dependency confusion, malicious model files, compromised pipelines |
 
-[Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) is an adversarial red-team toolkit from [15 Research Lab](https://15researchlab.com). It stress-tests AI agents, MCP servers, and agent safety stacks — including Authensor — using systematic, multi-step attack chains.
+### How It Works
 
-**What it does:**
+[Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) is the engine. It generates and executes multi-step attack chains using:
 
-- **Multi-step attack chains** mapped to [MITRE ATLAS](https://atlas.mitre.org/) — not one-shot prompts, but realistic adversarial sequences
-- **MCP server security scanner** — enumerates tools, probes for injection vectors, tests authorization boundaries
-- **15-dimension Chainbreaker Behavioral Score (CBS)** — quantitative safety rating derived from Petri-net behavioral modeling
-- **MITRE ATLAS coverage** — each test maps to a tactic and technique for compliance reporting
-- **Rust core, MIT licensed** — fast, auditable, zero runtime dependencies
-- **Desktop app + CLI** — team-friendly UI and CI/CD automation
+- **MITRE ATLAS mapping** -- every attack chain maps to documented tactics and techniques
+- **15-dimension Chainbreaker Behavioral Score (CBS)** -- quantitative safety rating, not vibes
+- **Automated at scale** -- thousands of attack variations, not a handful of manual tests
+- **Rust core** -- fast, auditable, zero runtime dependencies
+
+Findings feed back into Authensor's defense layer: new Aegis detection rules, policy templates, Sentinel behavioral signatures. The loop closes.
+
+### For Auditors and Certification Bodies
+
+If you're conducting AI safety assessments (AIUC-1, EU AI Act conformity, NIST AI RMF): the evaluation frameworks underlying those assessments have confirmed vulnerabilities we documented. We validate assessment infrastructure itself. Testing whether your testing works.
+
+[Contact: security@authensor.com](mailto:security@authensor.com)
 
 ---
 
@@ -414,7 +407,7 @@ Build agent → Protect with Authensor → Test with Chainbreaker → Improve �
 
 Everything is open source. Self-host it all, or use the managed version:
 
-| | Self-Hosted (Free) | Hosted ($5/mo) |
+| | Self-Hosted (Free) | Sponsored Tier |
 |---|---|---|
 | Policy engine | Yes | Yes |
 | Control plane | Yes | Yes, managed |
@@ -424,9 +417,10 @@ Everything is open source. Self-host it all, or use the managed version:
 | Approval workflows | Yes | Yes, with SMS/email gateway |
 | SpiroGrapher | Yes | Yes, with federated threat intel |
 | OpenTelemetry export | Yes | Yes, pre-configured |
-| Support | Community | Dedicated |
+| Support | Community | Priority |
 | Compliance reports | DIY | Automated |
-| SLA | None | 99.9% uptime |
+| Advanced detection rules | Community | Sponsor-exclusive |
+| Monthly threat briefings | - | Sponsor-exclusive |
 
 ## Deployment
 
@@ -501,4 +495,4 @@ Authensor is built on the belief that **safety tooling should not have a paywall
 
 ## License
 
-MIT — use it however you want.
+MIT -- use it however you want.
