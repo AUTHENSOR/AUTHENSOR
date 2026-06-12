@@ -7,15 +7,15 @@
  * Detects context, suggests the right path, and gets users running fast.
  *
  * Usage:
- *   npx authensor              — Interactive setup
- *   npx authensor init         — Initialize in current project
- *   npx authensor up           — Start control plane (docker compose)
- *   npx authensor status       — Check running services
- *   npx authensor templates    — List policy templates
- *   npx authensor apply <id>   — Apply a policy template
- *   npx authensor policy lint <file>        — Validate a policy file
- *   npx authensor policy test <file>        — Run policy test cases
- *   npx authensor policy diff <a> <b>       — Compare two policies
+ *   npx @authensor/cli              — Interactive setup
+ *   npx @authensor/cli init         — Initialize in current project
+ *   npx @authensor/cli up           — Start control plane (docker compose)
+ *   npx @authensor/cli status       — Check running services
+ *   npx @authensor/cli templates    — List policy templates
+ *   npx @authensor/cli apply <id>   — Apply a policy template
+ *   npx @authensor/cli policy lint <file>        — Validate a policy file
+ *   npx @authensor/cli policy test <file>        — Run policy test cases
+ *   npx @authensor/cli policy diff <a> <b>       — Compare two policies
  */
 
 import { execSync, spawn } from 'child_process';
@@ -158,7 +158,7 @@ async function cmdInit() {
   const selected = paths[idx];
 
   if (!selected) {
-    console.log(red('\n  Invalid choice. Run `npx authensor` to try again.\n'));
+    console.log(red('\n  Invalid choice. Run `npx @authensor/cli` to try again.\n'));
     process.exit(1);
   }
 
@@ -329,7 +329,7 @@ async function initSdk() {
     console.log(cyan('     npm install @authensor/openai      # OpenAI Agents SDK\n'));
   }
 
-  console.log(`  ${bold('Need a control plane?')} Run: ${cyan('npx authensor init')}\n`);
+  console.log(`  ${bold('Need a control plane?')} Run: ${cyan('npx @authensor/cli init')}\n`);
 }
 
 async function cmdUp() {
@@ -338,7 +338,7 @@ async function cmdUp() {
 
   if (!existsSync(composePath)) {
     console.log(yellow('\n  No docker-compose.yml found.'));
-    console.log(dim(`  Run ${cyan('npx authensor init')} first to set up.\n`));
+    console.log(dim(`  Run ${cyan('npx @authensor/cli init')} first to set up.\n`));
     process.exit(1);
   }
 
@@ -436,17 +436,17 @@ async function cmdTemplates() {
       console.log(`  ${' '.repeat(16)} ${dim(t.description)}\n`);
     }
 
-    console.log(dim(`  Apply with: npx authensor apply <template-id>\n`));
+    console.log(dim(`  Apply with: npx @authensor/cli apply <template-id>\n`));
   } catch (e) {
     console.log(red(`  Could not reach control plane at ${controlPlaneUrl}`));
-    console.log(dim(`  Start it with: npx authensor up\n`));
+    console.log(dim(`  Start it with: npx @authensor/cli up\n`));
   }
 }
 
 async function cmdApply(templateId: string) {
   if (!templateId) {
-    console.log(red('\n  Usage: npx authensor apply <template-id>'));
-    console.log(dim('  Run `npx authensor templates` to see available templates.\n'));
+    console.log(red('\n  Usage: npx @authensor/cli apply <template-id>'));
+    console.log(dim('  Run `npx @authensor/cli templates` to see available templates.\n'));
     process.exit(1);
   }
 
@@ -482,7 +482,7 @@ async function cmdApply(templateId: string) {
     }
   } catch (e) {
     console.log(red(`  Could not reach control plane at ${controlPlaneUrl}`));
-    console.log(dim(`  Start it with: npx authensor up\n`));
+    console.log(dim(`  Start it with: npx @authensor/cli up\n`));
     process.exit(1);
   }
 }
@@ -512,8 +512,8 @@ async function cmdAegisScan(text?: string) {
   }
 
   if (!text) {
-    console.log(red('\n  Usage: npx authensor aegis scan "text to scan"'));
-    console.log(dim('  Or pipe: echo "text" | npx authensor aegis scan\n'));
+    console.log(red('\n  Usage: npx @authensor/cli aegis scan "text to scan"'));
+    console.log(dim('  Or pipe: echo "text" | npx @authensor/cli aegis scan\n'));
     process.exit(1);
   }
 
@@ -726,8 +726,8 @@ function formatMs(ms: number): string {
 
 async function cmdPolicyLint(filePath?: string) {
   if (!filePath) {
-    console.log(red('\n  Usage: npx authensor policy lint <policy-file>'));
-    console.log(dim('  Example: npx authensor policy lint policy.json\n'));
+    console.log(red('\n  Usage: npx @authensor/cli policy lint <policy-file>'));
+    console.log(dim('  Example: npx @authensor/cli policy lint policy.json\n'));
     process.exit(1);
   }
 
@@ -754,8 +754,8 @@ async function cmdPolicyLint(filePath?: string) {
 
 async function cmdPolicyTest(testFilePath?: string) {
   if (!testFilePath) {
-    console.log(red('\n  Usage: npx authensor policy test <test-file>'));
-    console.log(dim('  Example: npx authensor policy test policy-tests.json\n'));
+    console.log(red('\n  Usage: npx @authensor/cli policy test <test-file>'));
+    console.log(dim('  Example: npx @authensor/cli policy test policy-tests.json\n'));
     console.log(dim('  Test file format:'));
     console.log(dim('  {'));
     console.log(dim('    "policy": "./policy.json",'));
@@ -811,9 +811,9 @@ async function cmdPolicyTest(testFilePath?: string) {
 
 async function cmdPolicyDiff(fileA?: string, fileB?: string) {
   if (!fileA) {
-    console.log(red('\n  Usage: npx authensor policy diff <policy-a> <policy-b>'));
-    console.log(dim('  Example: npx authensor policy diff old-policy.json new-policy.json'));
-    console.log(dim('  Or:      npx authensor policy diff policy.json --active\n'));
+    console.log(red('\n  Usage: npx @authensor/cli policy diff <policy-a> <policy-b>'));
+    console.log(dim('  Example: npx @authensor/cli policy diff old-policy.json new-policy.json'));
+    console.log(dim('  Or:      npx @authensor/cli policy diff policy.json --active\n'));
     process.exit(1);
   }
 
@@ -870,28 +870,28 @@ function printHelp() {
   ${bold('authensor')} v${VERSION} — The open-source safety stack for AI agents
 
   ${bold('Usage:')}
-    npx authensor              Interactive setup
-    npx authensor init         Initialize Authensor in your project
-    npx authensor up           Start control plane (docker compose)
-    npx authensor status       Check running services
-    npx authensor templates    List available policy templates
-    npx authensor apply <id>   Apply a policy template
+    npx @authensor/cli              Interactive setup
+    npx @authensor/cli init         Initialize Authensor in your project
+    npx @authensor/cli up           Start control plane (docker compose)
+    npx @authensor/cli status       Check running services
+    npx @authensor/cli templates    List available policy templates
+    npx @authensor/cli apply <id>   Apply a policy template
 
   ${bold('Policy tools:')}
-    npx authensor policy lint <file>         Validate a policy file
-    npx authensor policy test <test-file>    Run policy test cases
-    npx authensor policy diff <a> <b>        Compare two policy versions
-    npx authensor policy diff <a> --active   Compare with active policy
+    npx @authensor/cli policy lint <file>         Validate a policy file
+    npx @authensor/cli policy test <test-file>    Run policy test cases
+    npx @authensor/cli policy diff <a> <b>        Compare two policy versions
+    npx @authensor/cli policy diff <a> --active   Compare with active policy
 
   ${bold('Aegis (content safety):')}
-    npx authensor aegis scan "text"   Scan text for threats
-    npx authensor aegis status        Scanner status and rule counts
-    echo "text" | npx authensor aegis scan   Pipe content to scan
+    npx @authensor/cli aegis scan "text"   Scan text for threats
+    npx @authensor/cli aegis status        Scanner status and rule counts
+    echo "text" | npx @authensor/cli aegis scan   Pipe content to scan
 
   ${bold('Sentinel (monitoring):')}
-    npx authensor sentinel status     Monitoring status
-    npx authensor sentinel alerts     View active alerts
-    npx authensor sentinel agents     Per-agent behavioral stats
+    npx @authensor/cli sentinel status     Monitoring status
+    npx @authensor/cli sentinel alerts     View active alerts
+    npx @authensor/cli sentinel agents     Per-agent behavioral stats
 
   ${bold('Environment:')}
     CONTROL_PLANE_URL          Control plane URL (default: http://localhost:3000)
