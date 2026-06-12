@@ -1,6 +1,6 @@
 {
   "name": "@authensor/claude-agent-sdk",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Authensor guardrail adapter for Claude Agent SDK",
   "type": "module",
   "main": "./dist/index.js",

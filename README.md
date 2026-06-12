@@ -120,9 +120,9 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 | `@authensor/control-plane` | HTTP API: evaluate, receipts, approvals, policies, budgets, shadow eval | Hono, pg |
 | `@authensor/mcp-server` | MCP tools with policy enforcement (Stripe, GitHub, HTTP) | -- |
 | `@authensor/sdk` | TypeScript SDK for agent builders | -- |
-| `authensor` | CLI: `authensor policy lint`, `authensor policy test`, `authensor policy diff` | -- |
+| `@authensor/cli` | CLI: `authensor policy lint`, `authensor policy test`, `authensor policy diff` | -- |
 | `authensor` (Python) | Python SDK | -- |
-| `create-authensor` | Project scaffolder: `npx create-authensor` | -- |
+| `@authensor/create-authensor` | Project scaffolder: `npx @authensor/create-authensor` | -- |
 | `@authensor/redteam` | Adversarial red-team test seeds (15 attack patterns, 5 categories, MITRE ATLAS mapped) | 0 |
 
 ### Framework Adapters

@@ -1,6 +1,6 @@
 {
   "name": "@authensor/vercel-ai-sdk",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Authensor guardrail adapter for Vercel AI SDK",
   "type": "module",
   "main": "./dist/index.js",
