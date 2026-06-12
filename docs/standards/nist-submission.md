@@ -138,24 +138,6 @@ A global kill switch and per-tool disable controls provide defense-in-depth inde
 
 ---
 
-## 7. Web Content Safety (for Browsing Agents)
-
-### Problem
-Browsing agents interact with web content that may contain dark patterns, phishing, or manipulative UI elements. 32% of MCP servers have critical vulnerabilities (Trail of Bits, 2025).
-
-### Our Approach: SpiroGrapher
-
-SpiroGrapher compiles raw HTML into a structured **Web IR** (Intermediate Representation) and evaluates it against 26 constitutional rules covering:
-- Deceptive link text
-- Hidden form fields
-- Misleading button placement
-- Phishing indicators
-- Data exfiltration patterns
-
-Research shows agents fall for dark patterns 41% of the time — SpiroGrapher reduces this to near-zero by evaluating content before the agent sees it.
-
----
-
 ## Alignment with NIST AI RMF
 
 | NIST AI RMF Function | Authensor Feature |

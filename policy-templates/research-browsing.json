@@ -1,7 +1,7 @@
 {
   "id": "research-browsing-safety",
   "name": "Research & Browsing Agent Policy",
-  "description": "Controls for agents that browse the web, make API calls, and scrape data. Enforces domain allowlisting, blocks SSRF, and limits request volume. Pairs with SiteSitter for web content governance.",
+  "description": "Controls for agents that browse the web, make API calls, and scrape data. Enforces domain allowlisting, blocks SSRF, and limits request volume.",
   "version": "1.0.0",
   "defaultEffect": "deny",
   "scope": {

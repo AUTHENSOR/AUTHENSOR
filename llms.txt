@@ -37,10 +37,6 @@ Real-time monitoring engine. EWMA spike detection + CUSUM drift detection. Per-a
 Local-first agent safety. PreToolUse hook gating, deny-by-default, mobile approval dashboard, budget controls.
 - Source: https://github.com/authensor/safeclaw
 
-### SiteSitter
-Web governance for browsing agents. HTML→IR compilation, dark pattern detection, constitutional browsing rules, federated threat intelligence.
-- Source: https://github.com/authensor/sitesitter
-
 ## Quickstart
 
 ```bash

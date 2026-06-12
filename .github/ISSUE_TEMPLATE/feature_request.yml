@@ -24,7 +24,6 @@ body:
         - "CLI"
         - "Framework Adapters"
         - "SafeClaw"
-        - "SiteSitter"
         - "Documentation"
         - "Compliance (OWASP, EU AI Act, NIST)"
         - "Other"

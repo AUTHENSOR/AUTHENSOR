@@ -1,6 +1,6 @@
 # Authensor Safety Stack — Full Ecosystem
 
-## The 5 Products
+## The 4 Products
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -24,12 +24,6 @@
 │  │              │  any agent    │               │  drift, threats   │
 │  │  MIT         │               │  MIT          │                   │
 │  └─────────────┘               └──────────────┘                   │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  SITESITTER — Web governance for browsing agents          │   │
-│  │  What can the agent SEE on the web? Dark patterns,         │   │
-│  │  deceptive content, unsafe sites. Apache 2.0               │   │
-│  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -84,7 +78,7 @@
 │  FREE (Self-hosted)              HOSTED ($5/month)                  │
 │  ─────────────────              ───────────────────                  │
 │                                                                     │
-│  ✓ All 5 products               ✓ Everything in Free               │
+│  ✓ All 4 products               ✓ Everything in Free               │
 │  ✓ Full source code             ✓ No Docker/Postgres needed        │
 │  ✓ Unlimited agents             ✓ Instant token (30sec setup)      │
 │  ✓ All features                 ✓ Weekly Aegis rule updates        │

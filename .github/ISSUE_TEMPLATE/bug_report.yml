@@ -28,7 +28,6 @@ body:
         - "@authensor/openai"
         - "@authensor/crewai"
         - "SafeClaw"
-        - "SiteSitter"
         - "Other"
     validations:
       required: true

@@ -143,8 +143,8 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 | Tool | Description |
 |------|-------------|
 | [SafeClaw](https://github.com/authensor/safeclaw) | Local agent gating with PreToolUse hooks, mobile PWA dashboard, swipe-to-approve |
-| [SpiroGrapher](https://github.com/authensor/spirographer) | Web governance: HTML to IR compilation, 26 constitutional rules, dark pattern detection |
-| [SiteSitter](https://github.com/AUTHENSOR/SiteSitter) | Website safety monitoring and governance |
+| [ai-seclists](https://github.com/authensor/ai-seclists) | AI security payloads and wordlists -- prompt injection, jailbreaks, model exploitation. The SecLists of AI |
+| [prompt-injection-benchmark](https://github.com/authensor/prompt-injection-benchmark) | Standardized benchmark for AI safety scanners -- run your scanner, get a score |
 | [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) | Adversarial red-teaming for AI agents -- multi-step attack chains, MITRE ATLAS mapped, 15-dimension CBS scoring |
 
 ## Quickstart
@@ -415,7 +415,6 @@ Everything is open source. Self-host it all, or use the managed version:
 | Sentinel monitoring | Yes | Yes, with dashboards |
 | Receipts & audit trail | Yes | Yes, with retention SLA |
 | Approval workflows | Yes | Yes, with SMS/email gateway |
-| SpiroGrapher | Yes | Yes, with federated threat intel |
 | OpenTelemetry export | Yes | Yes, pre-configured |
 | Support | Community | Priority |
 | Compliance reports | DIY | Automated |

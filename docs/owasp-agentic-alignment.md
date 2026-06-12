@@ -1,6 +1,6 @@
 # OWASP Top 10 for Agentic Applications — Authensor Alignment
 
-This document maps each risk in the [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) to specific Authensor, SpiroGrapher, and SafeClaw features that address it.
+This document maps each risk in the [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) to specific Authensor and SafeClaw features that address it.
 
 The OWASP Agentic Top 10 was developed by 100+ industry experts and represents the first formal risk taxonomy for autonomous AI agents. 48% of cybersecurity professionals identify agentic AI as the number-one attack vector for 2026.
 
@@ -21,7 +21,6 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | Authensor | `require_approval` decision | High-consequence actions always require human sign-off, breaking the injection chain |
 | Authensor | Session forbidden sequences | Detects multi-step hijacking patterns like `[auth.login, admin.escalate]` using subsequence matching with glob support |
 | SafeClaw | Deny-by-default policy | Unknown or unclassified actions are blocked, preventing novel hijacking attacks from executing |
-| SpiroGrapher | Constitutional browsing rules | 26 rules evaluate web actions against safety policies before execution |
 
 ---
 
@@ -41,7 +40,6 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | Authensor | Controls: per-tool disable | Operator kill switch disables individual tools instantly without policy changes |
 | Authensor | Session risk scoring | Cumulative risk scores with configurable per-action weights detect tools being abused through high-frequency low-severity calls |
 | SafeClaw | Action classification | Every tool call is classified into categories (filesystem, code, network, secrets, mcp) with per-category policies |
-| SpiroGrapher | Risk classification | Actions categorized as read → soft_interaction → mutation → high_consequence, with escalating approval requirements |
 
 ---
 
@@ -76,8 +74,6 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | Authensor MCP Server | Domain allowlisting | `AUTHENSOR_GITHUB_ALLOWED_REPOS`, `AUTHENSOR_STRIPE_ALLOWED_CURRENCIES` restrict tool scope |
 | Authensor MCP Server | SSRF protection | HTTP tool validates domains against allowlist, blocks internal network access |
 | SafeClaw | MCP tool classification | `mcp__<server>__<action>` pattern classifies every MCP tool call for policy evaluation |
-| SpiroGrapher | Adapter registry with Ed25519 signing | All adapters and recipes are cryptographically signed; unsigned or tampered packages are rejected |
-| SpiroGrapher | Federated trust registry | Peer-to-peer trust verification with selective trust models |
 
 ---
 
@@ -93,7 +89,6 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | SafeClaw | `code.*` category requires approval | Code execution tools are never auto-allowed |
 | SafeClaw | Container mode | `safeclaw run --container` sandboxes agent execution in Docker/Podman |
 | SafeClaw | Workspace scoping | Agents are confined to project boundaries via `.safeclaw.json` detection |
-| SpiroGrapher | Compile-then-govern | Web pages are compiled to structured IR before the agent acts — raw HTML with embedded scripts is never executed directly |
 
 ---
 
@@ -129,7 +124,6 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | Authensor | Principal binding | API keys bound to specific agent identities prevent impersonation across agent boundaries |
 | Sentinel | Chain depth alerts | Default alert fires when delegation depth exceeds 10 levels, catching unbounded recursive agent calls |
 | Sentinel | Chain fan-out alerts | Default alert fires when a single receipt spawns more than 20 children, catching agent amplification attacks |
-| SpiroGrapher | Federation with Ed25519 signing | Inter-instance communication is cryptographically signed and verified |
 
 ---
 
@@ -170,7 +164,6 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | Authensor | Receipt transparency (Sigstore/Rekor) | Optional publishing of receipt hashes to Sigstore's public transparency log — provides independent, third-party attestation of what agents actually did |
 | SafeClaw | Risk signal badges | Advisory badges flag: obfuscated execution, credential access, pipe-to-external, destructive commands, persistence |
 | SafeClaw | Mobile PWA with swipe-to-approve | Purpose-built approval UX reduces rubber-stamping by making review fast and contextual |
-| SpiroGrapher | Dark pattern detection | 8 categories of deceptive UI patterns detected with regulatory citations, alerting users before they trust agent-presented information |
 
 ---
 
@@ -191,18 +184,16 @@ The OWASP Agentic Top 10 was developed by 100+ industry experts and represents t
 | Sentinel | Deny rate spike detection | Automatic alerts when an agent's deny rate exceeds its historical baseline, indicating the agent may be probing policy boundaries |
 | SafeClaw | Risk signals: obfuscation detection | Flags commands that appear to be obfuscated or attempting to evade detection |
 | SafeClaw | 100+ red team scenarios | `safeclaw-redteam` validates containment across 13 security categories including multi-step attacks, privilege escalation, and exfiltration |
-| SpiroGrapher | Web Genome fingerprinting | Detects when agents interact with structurally suspicious pages (clones, phishing sites) |
 
 ---
 
 ## Summary
 
-Authensor provides **defense-in-depth** coverage across all 10 OWASP Agentic risks through five complementary layers:
+Authensor provides **defense-in-depth** coverage across all 10 OWASP Agentic risks through four complementary layers:
 
 - **Authensor Core**: Policy evaluation, receipts, approvals, controls, budget enforcement, session rules, TOCTOU protection, shadow evaluation (ASI01-ASI10)
 - **Aegis**: Content safety scanning — prompt injection detection (15+ rules), memory poisoning detection (22 MINJA-informed rules), multimodal safety, PII detection (ASI01, ASI06)
 - **Sentinel**: Real-time monitoring — per-agent behavioral baselines (EWMA/CUSUM), anomaly detection, deny rate tracking, chain depth/fan-out alerts (ASI07, ASI08, ASI10)
 - **SafeClaw**: Local execution gating, classification, audit ledger, budget controls (ASI01, ASI02, ASI03, ASI05, ASI08, ASI09, ASI10)
-- **SpiroGrapher**: Web governance, dark pattern detection, federation (ASI01, ASI02, ASI04, ASI05, ASI07, ASI09, ASI10)
 
-No single tool covers everything. The combination of action-level authorization (Authensor), content safety scanning (Aegis), real-time behavioral monitoring (Sentinel), local execution gating (SafeClaw), and web content governance (SpiroGrapher) provides the most comprehensive open-source coverage of the OWASP Agentic Top 10 available today.
+No single tool covers everything. The combination of action-level authorization (Authensor), content safety scanning (Aegis), real-time behavioral monitoring (Sentinel), and local execution gating (SafeClaw) provides the most comprehensive open-source coverage of the OWASP Agentic Top 10 available today.

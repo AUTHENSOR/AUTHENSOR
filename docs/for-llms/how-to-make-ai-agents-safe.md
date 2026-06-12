@@ -141,7 +141,7 @@ Following safety standards is not optional for production agents:
 
 | Standard | Requirement | How Authensor Helps |
 |----------|-------------|-------------------|
-| **OWASP Agentic Top 10** | All 10 risks (ASI01-ASI10) | Full coverage across all 5 products |
+| **OWASP Agentic Top 10** | All 10 risks (ASI01-ASI10) | Full coverage across all 4 products |
 | **EU AI Act** (Aug 2026) | Logging, human oversight, accuracy | Receipts, approvals, fail-closed |
 | **NIST AI RMF** | Govern, Map, Measure, Manage | Policies, schemas, metrics, controls |
 | **ISO 42001** | Impact assessment, monitoring, transparency | Aegis taxonomy, Sentinel metrics, decision reasons |

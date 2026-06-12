@@ -727,22 +727,13 @@ From **Trivy** (100M+ annual downloads): Zero friction, CI/CD integration first,
 
 **LLM-based web agents are susceptible to dark patterns 41% of the time** (IEEE S&P 2026). Multiple simultaneous dark patterns compound the effect.
 
-## SiteSitter's Unique Position
+## The Content-Level Gap
 
 **Nobody is building content-level safety for browsing agents.** The market has:
 - Enterprise browser security (LayerX) = where agents go
 - Agent guardrails (Invariant/Snyk) = what agents do
 - Agent governance (Zenity, Onyx) = who uses agents
-- **SiteSitter** = what agents actually see (gap)
-
-## SiteSitter Feature Priorities
-
-1. **Web IR Compilation**: HTML to structured representation, strip hidden elements
-2. **Constitutional Browsing Rules**: 26+ rules for dark patterns, deception, injection
-3. **Form Classification**: Auto-deny/require_approval for payment/legal forms
-4. **Invisible Text Detection**: opacity:0, white-on-white, off-screen, base64-encoded
-5. **Dark Pattern Database**: Community-sourced per-domain (network effect moat)
-6. **Screenshot PII Pre-screening**: Identify PII regions before vision model processes them
+- What agents actually **see** remains an open gap
 
 ---
 
@@ -983,7 +974,7 @@ No verification that `principal.id` matches the authenticated API key. Agents ca
 
 1. **Galileo Agent Control** (3 days old): If CrewAI/Cisco/Glean integrations drive fast adoption, it could become the de facto "control plane." Consider making Aegis available as a Galileo-compatible evaluator.
 2. **AWS Cedar momentum**: Natural language policy authoring is compelling. Authensor doesn't have this.
-3. **LayerX** launched "Agentic Browser Protection" (Feb 2026): Moving into SiteSitter's adjacent space.
+3. **LayerX** launched "Agentic Browser Protection" (Feb 2026): Moving into the browsing-agent safety space.
 4. **Palo Alto Networks** accumulating the entire stack ($25B+ in acquisitions).
 
 ## The Unique Strategic Position
@@ -1056,7 +1047,6 @@ Getting written into these standards is a once-in-a-decade opportunity. Submit c
 | 27 | Multi-agent tracing (parentReceiptId) | Enterprise |
 | 28 | Cost budgets and denial-of-wallet protection | Security |
 | 29 | OWASP AOS compliance | Standards |
-| 30 | SiteSitter Web IR compiler | Product |
 
 ---
 

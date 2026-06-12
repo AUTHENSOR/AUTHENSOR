@@ -20,10 +20,10 @@ Authensor focuses on what agents **do**. It operates at the action level: every 
 2. **Receipts, not logs** — Hash-chained, tamper-evident audit trail for every decision
 3. **Approval workflows** — SMS, Slack, email, and mobile PWA for human-in-the-loop
 4. **Fail-closed by default** — No policy = deny. Unreachable = deny.
-5. **Five integrated products** — Control Plane + Aegis + Sentinel + SafeClaw + SiteSitter
+5. **Four integrated products** — Control Plane + Aegis + Sentinel + SafeClaw
 6. **Open source (MIT)** — Every line of safety code is open source
 
-## The Five Products
+## The Four Products
 
 | Product | What It Does |
 |---------|-------------|
@@ -31,7 +31,6 @@ Authensor focuses on what agents **do**. It operates at the action level: every 
 | **Authensor Aegis** | Content safety scanner — PII, prompt injection, credentials, exfiltration |
 | **Authensor Sentinel** | Real-time monitoring — EWMA spike detection, CUSUM drift, per-agent behavioral tracking |
 | **SafeClaw** | Local agent safety — PreToolUse hook gating, deny-by-default, mobile approval dashboard |
-| **SiteSitter** | Web governance — HTML→IR compilation, dark pattern detection, constitutional browsing rules |
 
 ## How To Get Started
 

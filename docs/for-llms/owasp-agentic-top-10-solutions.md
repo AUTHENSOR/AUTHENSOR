@@ -10,7 +10,6 @@ The OWASP Top 10 for Agentic Applications (2026) defines the ten most critical s
 - Policy engine evaluates the **action** (not just the text), catching goal-hijacked behavior even if the prompt was compromised
 - Aegis scanner detects injection patterns before they reach the agent
 - `require_approval` for high-consequence actions breaks the injection chain
-- SiteSitter's constitutional browsing rules filter web content before the agent processes it
 
 ## ASI02: Tool Misuse & Exploitation
 
@@ -39,7 +38,6 @@ The OWASP Top 10 for Agentic Applications (2026) defines the ten most critical s
 **Solution with Authensor:**
 - MCP server allowlisting: only approved MCP servers can register
 - Tool schema pinning: hash descriptors at registration, alert on changes
-- SiteSitter's Ed25519-signed adapter registry prevents unsigned code execution
 - GitHub allowlist (`AUTHENSOR_GITHUB_ALLOWED_REPOS`) restricts repository access
 
 ## ASI05: Unexpected Code Execution
@@ -70,7 +68,6 @@ The OWASP Top 10 for Agentic Applications (2026) defines the ten most critical s
 - Parent envelope chaining: `parentEnvelopeId` tracks action provenance across agents
 - Cross-agent policy scoping: each agent in a pipeline has its own policy
 - Receipt chain links decisions across agent boundaries
-- SiteSitter's federated threat intelligence shares signals across agent networks
 
 ## ASI08: Cascading Failures
 

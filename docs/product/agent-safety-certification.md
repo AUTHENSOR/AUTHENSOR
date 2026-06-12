@@ -336,7 +336,7 @@ The attestation is a signed JSON document following the in-toto attestation form
 
 ### Signing
 
-Attestations are signed using Ed25519 keys (same algorithm used by Sigstore and SiteSitter's federation):
+Attestations are signed using Ed25519 keys (same algorithm used by Sigstore):
 
 ```bash
 # Generate a signing key

@@ -36,7 +36,6 @@ Source: [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for
 | Authensor Control Plane | `require_approval` decision | High-consequence actions always require human sign-off, breaking the injection chain |
 | Aegis | Injection detector (87 rules) | Detects direct/indirect prompt injection patterns before they reach the agent |
 | SafeClaw | Deny-by-default policy | Unknown or unclassified actions are blocked, preventing novel hijacking from executing |
-| SiteSitter | Constitutional browsing rules (26 rules) | Evaluates web actions against safety policies before execution |
 
 **Gaps (honest assessment):**
 - Aegis injection detection is regex-based, not ML-based. Sophisticated semantic injection attacks that don't match known patterns will bypass it. Lakera's ML classifier is stronger here.
@@ -58,7 +57,6 @@ Source: [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for
 | Authensor Engine | Rate limiting per tool | Per-tool rate limits prevent abuse via high-frequency calls |
 | Authensor Control Plane | Per-tool disable (controls API) | Kill switch disables individual tools instantly without policy changes |
 | SafeClaw | Action classification | Tool calls classified into categories (filesystem, code, network, secrets, mcp) with per-category policies |
-| SiteSitter | Risk classification | Actions categorized as read -> soft_interaction -> mutation -> high_consequence with escalating requirements |
 
 **Gaps:**
 - No tool-call-sequence analysis. Authensor evaluates each action independently; it cannot detect that "list files, then read secrets, then curl external" is a multi-step exfiltration chain. Would require stateful session tracking.
@@ -100,14 +98,12 @@ Source: [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for
 | Authensor MCP Server | Domain allowlisting | `AUTHENSOR_GITHUB_ALLOWED_REPOS`, `AUTHENSOR_STRIPE_ALLOWED_CURRENCIES` |
 | Authensor MCP Server | SSRF protection | HTTP tool validates domains against allowlist, blocks internal network access |
 | SafeClaw | MCP tool classification | `mcp__<server>__<action>` classifies every MCP tool call for policy evaluation |
-| SiteSitter | Ed25519-signed adapter registry | Unsigned or tampered packages rejected |
-| SiteSitter | Federated trust registry | Peer-to-peer trust verification |
 
 **Gaps:**
 - No tool schema pinning/hashing in production. The MCP security doc mentions "hash tool descriptors at registration, alert on changes" but this is documented as a best practice, not an implemented feature.
 - No SBOM (Software Bill of Materials) generation or dependency scanning for MCP server packages.
 - No runtime tool description drift detection. If an MCP server changes its tool descriptions (rug-pull), Authensor does not currently detect this.
-- No tool provenance verification beyond SiteSitter's adapter signing (which applies to SiteSitter recipes, not arbitrary MCP servers).
+- No tool provenance verification for MCP servers or tool packages.
 
 **Coverage: MODERATE** -- Allowlisting and SSRF protection help, but proactive supply chain verification (schema pinning, drift detection, SBOM) is largely unimplemented.
 
@@ -124,7 +120,6 @@ Source: [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for
 | SafeClaw | `code.*` category requires approval | Code execution tools never auto-allowed |
 | SafeClaw | Container mode | `safeclaw run --container` sandboxes in Docker/Podman |
 | SafeClaw | Workspace scoping | Agents confined to project boundaries |
-| SiteSitter | Compile-then-govern | HTML compiled to structured IR; raw scripts never executed directly |
 
 **Gaps:**
 - Aegis code safety detection is pattern-based; obfuscated commands (base64-encoded, variable substitution, hex encoding) may bypass pattern matching.
@@ -167,7 +162,6 @@ Source: [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for
 | Authensor Engine | `parentEnvelopeId` in context | Delegation chains tracked -- every action knows which parent spawned it |
 | Authensor Engine | Per-principal policies | Different agents have different policy scopes |
 | Authensor Control Plane | Receipt chain provenance | Complete audit trail of which agent called which, with what authority |
-| SiteSitter | Federation with Ed25519 signing | Inter-instance communication cryptographically signed |
 
 **Gaps:**
 - No message-level encryption or signing between agents. `parentEnvelopeId` is a reference, not a cryptographic proof.
@@ -214,13 +208,11 @@ Source: [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for
 | Authensor Control Plane | Time-limited approvals | Auto-deny prevents indefinite pending actions |
 | SafeClaw | Risk signal badges | Advisory badges: obfuscated execution, credential access, pipe-to-external, destructive commands, persistence |
 | SafeClaw | Mobile PWA with swipe-to-approve | Purpose-built approval UX reduces rubber-stamping |
-| SiteSitter | Dark pattern detection | 8 categories of deceptive UI patterns with FTC/EU DSA regulatory citations |
 
 **Gaps:**
 - No "approval fatigue" detection. If a human is approving 95% of requests in rapid succession, there's no alert that they may be rubber-stamping.
 - Approval UI shows the raw action envelope but doesn't provide contextual risk scoring or explainability about why this action is risky.
 - No A/B testing or UX research on approval UI effectiveness.
-- Dark pattern detection (SiteSitter) applies to web content the agent browses, not to the agent's own outputs presented to the user.
 
 **Coverage: STRONG** -- Multi-party approval with risk signals is the strongest offering in the market. Approval fatigue detection would be a meaningful enhancement.
 
@@ -266,7 +258,6 @@ Source: [OWASP LLM Top 10](https://genai.owasp.org/resource/owasp-top-10-for-llm
 | Aegis | Injection detector (87 rules) | Detects direct override patterns, delimiter-based injection, role manipulation, hidden HTML comment injection |
 | Authensor Engine | Action-level evaluation | Even if injection succeeds, the resulting action must still pass policy |
 | SafeClaw | Deny-by-default | Injected actions for tools not in the allowlist are blocked |
-| SiteSitter | Web content filtering | Detects injection payloads embedded in web pages before agent processes them |
 
 **Gaps:**
 - Aegis is regex/pattern-based, not ML-based. Novel injection techniques will bypass.
@@ -305,16 +296,14 @@ Source: [OWASP LLM Top 10](https://genai.owasp.org/resource/owasp-top-10-for-llm
 | Layer | Feature | How it Addresses |
 |-------|---------|-----------------|
 | Authensor MCP Server | Domain/repo allowlisting | Restricts which external services agents can access |
-| SiteSitter | Ed25519-signed packages | Cryptographic verification of adapter/recipe packages |
-| SiteSitter | Federated trust registry | Peer-to-peer trust verification |
 
 **Gaps:**
 - No model provenance verification (model signing, hash verification for downloaded models).
 - No training data integrity checking.
-- No plugin/extension signing for Authensor's own ecosystem (only SiteSitter recipes are signed).
+- No plugin/extension signing for Authensor's own ecosystem.
 - No automated vulnerability scanning of dependencies.
 
-**Coverage: PARTIAL** -- Covers runtime supply chain (MCP servers, web adapters) but not model/data supply chain.
+**Coverage: PARTIAL** -- Covers runtime supply chain (MCP servers) but not model/data supply chain.
 
 ---
 
@@ -420,7 +409,6 @@ Source: [OWASP LLM Top 10](https://genai.owasp.org/resource/owasp-top-10-for-llm
 
 | Layer | Feature | How it Addresses |
 |-------|---------|-----------------|
-| SiteSitter | Dark pattern detection | Detects deceptive web content that could feed misinformation to agents |
 | Authensor Control Plane | Receipts with action context | Records what information agents acted on, enabling forensic review |
 
 **Gaps:**
@@ -526,14 +514,13 @@ Source: [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/)
 
 | Layer | Feature | How it Addresses |
 |-------|---------|-----------------|
-| SiteSitter | Ed25519-signed adapters | Cryptographic verification of packages |
 | Authensor MCP Server | Domain allowlisting | Restricts accessible services |
 
 **Gaps:**
 - No dependency scanning for MCP server packages (npm audit, Snyk-style).
 - No SBOM generation.
 - No runtime integrity verification of loaded MCP server code.
-- Ed25519 signing only applies to SiteSitter packages, not arbitrary MCP servers.
+- No cryptographic signing or verification of MCP server packages.
 
 **Coverage: WEAK**
 
@@ -566,7 +553,6 @@ Source: [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/)
 | Layer | Feature | How it Addresses |
 |-------|---------|-----------------|
 | Aegis | Injection detector | Scans content for injection patterns |
-| SiteSitter | Constitutional rules | Evaluates web content before agent processes it |
 | Authensor Engine | Action-level gating | Even if intent is subverted, resulting actions must pass policy |
 
 **Gaps:**
@@ -704,12 +690,12 @@ How do competing tools cover the OWASP Agentic Top 10?
 | **ASI01: Goal Hijacking** | STRONG (action-level policy + Aegis injection + approval workflows) | MODERATE (Cedar policies, no injection detection) | MODERATE (guardrail evaluators, no action gating) | MODERATE (Colang flow control, topic guardrailing) | WEAK (output validation only) | MODERATE (best-in-class injection detection, but prompt-level only) | MODERATE (ML injection classifier) |
 | **ASI02: Tool Misuse** | STRONG (per-tool policies, constraints, rate limits) | STRONG (Cedar fine-grained authz) | MODERATE (policy evaluators) | WEAK (no tool-level policies) | WEAK (no tool governance) | NONE | NONE |
 | **ASI03: Identity Abuse** | MODERATE (RBAC, principal scoping) | STRONG (Cedar + AWS IAM integration) | WEAK (no identity layer) | NONE | NONE | NONE | NONE |
-| **ASI04: Supply Chain** | MODERATE (allowlisting, SSRF protection, SiteSitter signing) | WEAK (AWS-only ecosystem) | WEAK | NONE | NONE | NONE | NONE |
+| **ASI04: Supply Chain** | MODERATE (allowlisting, SSRF protection) | WEAK (AWS-only ecosystem) | WEAK | NONE | NONE | NONE | NONE |
 | **ASI05: Code Execution** | STRONG (deny-by-default, Aegis code safety, container mode) | MODERATE (Cedar policies) | WEAK | MODERATE (output rails can block code) | WEAK (output validation) | NONE | MODERATE (code patterns) |
 | **ASI06: Memory Poisoning** | MODERATE (receipt chain, drift detection) | NONE | MODERATE (evaluation/monitoring) | NONE | NONE | NONE | NONE |
 | **ASI07: Inter-Agent Comms** | MODERATE (parent envelope chaining, per-agent policies) | NONE | NONE | NONE | NONE | NONE | NONE |
 | **ASI08: Cascading Failures** | STRONG (kill switch, circuit breakers, rate limits, budget controls) | WEAK | WEAK | NONE | NONE | NONE | NONE |
-| **ASI09: Trust Exploitation** | STRONG (multi-party approval, risk signals, dark pattern detection) | NONE | NONE | NONE | NONE | NONE | NONE |
+| **ASI09: Trust Exploitation** | STRONG (multi-party approval, risk signals) | NONE | NONE | NONE | NONE | NONE | NONE |
 | **ASI10: Rogue Agents** | STRONG (fail-closed, behavioral monitoring, kill switch) | MODERATE (fail-closed via Cedar) | MODERATE (monitoring/evaluation) | NONE | NONE | NONE | NONE |
 
 ### LLM Top 10 Coverage Matrix
@@ -733,7 +719,6 @@ How do competing tools cover the OWASP Agentic Top 10?
    - Only tool with approval workflows (ASI09)
    - Only tool with cryptographic audit trail (ASI08/MCP08)
    - Only tool with kill switch and circuit breakers (ASI08)
-   - Only tool with web browsing governance (SiteSitter)
    - Only tool with MCP-specific governance
    - Only tool with behavioral monitoring (Sentinel)
 

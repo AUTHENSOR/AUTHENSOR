@@ -23,7 +23,6 @@ Most tools are in category 1. Authensor is in category 2 — and also includes c
 | **Prompt injection detection** | Yes | No | No | Yes (Llama Guard) | Via plugin | Yes (best-in-class) | Yes (ML classifier) |
 | **PII detection** | Yes | No | No | Yes (Presidio) | Via plugin | Yes | Yes |
 | **MCP tool governance** | Yes | No | No | No | No | No | No |
-| **Web browsing governance** | Yes (SiteSitter) | No | No | No | No | No | No |
 | **Multi-party approval** | Yes (quorum voting) | No | No | No | No | No | No |
 | **Mobile approval UI** | Yes (PWA) | No | No | No | No | No | No |
 | **Kill switch** | Yes | No | No | No | No | No | No |
@@ -42,7 +41,6 @@ Most tools are in category 1. Authensor is in category 2 — and also includes c
 - You need a **cryptographic audit trail** (compliance, EU AI Act, SOC 2)
 - You want **one platform** covering action auth + content safety + monitoring
 - You need **MCP governance** (securing MCP tool calls)
-- You need **web browsing governance** (safe agent web browsing)
 - You want **open source** with self-hosting and no vendor lock-in
 
 ### Choose NeMo Guardrails when:
