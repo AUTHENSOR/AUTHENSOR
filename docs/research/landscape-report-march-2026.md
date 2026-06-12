@@ -811,10 +811,10 @@ Only 44% of organizations have financial guardrails for AI. Budget enforcement v
 
 ## Highest-Value CLI Tools to Build
 
-1. `npx authensor policy lint` -- fast local policy validation
-2. `npx authensor policy test` -- envelope/decision test cases
-3. `npx authensor certify` -- ASC certification checks
-4. `npx authensor policy diff` -- human-readable policy comparison
+1. `npx @authensor/cli policy lint` -- fast local policy validation
+2. `npx @authensor/cli policy test` -- envelope/decision test cases
+3. `npx @authensor/cli certify` -- ASC certification checks
+4. `npx @authensor/cli policy diff` -- human-readable policy comparison
 
 ## Infrastructure-as-Code
 
@@ -1030,7 +1030,7 @@ Getting written into these standards is a once-in-a-decade opportunity. Submit c
 | 15 | Add tool result scanning to Aegis (gap #1) | Security |
 | 16 | Integrate tool integrity checking into MCP gateway (gap #7) | Security |
 | 17 | Build interactive policy playground | DX |
-| 18 | `npx authensor policy lint/test/diff` CLI tools | DevOps |
+| 18 | `npx @authensor/cli policy lint/test/diff` CLI tools | DevOps |
 | 19 | Helm chart for Kubernetes deployment | Enterprise |
 | 20 | Vercel AI SDK + Claude Agent SDK adapters | Framework coverage |
 | 21 | Discord/Slack community launch | Community |

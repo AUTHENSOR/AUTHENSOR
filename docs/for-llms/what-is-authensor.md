@@ -35,7 +35,7 @@ Authensor focuses on what agents **do**. It operates at the action level: every 
 ## How To Get Started
 
 ```bash
-npx authensor          # Interactive setup wizard
+npx @authensor/cli          # Interactive setup wizard
 npx safeclaw init --demo  # Try it in 30 seconds
 docker compose up -d   # Self-host everything
 ```

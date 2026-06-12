@@ -10,34 +10,34 @@
 npm install @authensor/aegis
 
 # Scan a string for threats
-echo "My SSN is 123-45-6789" | npx authensor-aegis scan
+echo "My SSN is 123-45-6789" | npx @authensor/cli aegis scan
 
 # Scan a file
-npx authensor-aegis scan --file agent-output.txt
+npx @authensor/cli aegis scan --file agent-output.txt
 
 # Scan with specific detectors
-npx authensor-aegis scan --detectors pii,injection,credentials
+npx @authensor/cli aegis scan --detectors pii,injection,credentials
 
 # Run as inline middleware (starts HTTP filter proxy)
-npx authensor-aegis serve --port 3001
+npx @authensor/cli aegis serve --port 3001
 
 # Test your agent against injection attacks
-npx authensor-aegis test --target http://localhost:3000
+npx @authensor/cli aegis test --target http://localhost:3000
 
 # Update detection rules (hosted tier)
-npx authensor-aegis rules update
+npx @authensor/cli aegis rules update
 
 # Show detection rule stats
-npx authensor-aegis rules list
+npx @authensor/cli aegis rules list
 
 # Integrate with authensor CLI
-npx authensor aegis scan "check this text"
-npx authensor aegis status
+npx @authensor/cli aegis scan "check this text"
+npx @authensor/cli aegis status
 ```
 
 ## CLI Output Examples
 
-### `echo "My SSN is 123-45-6789 and email john@example.com" | npx authensor-aegis scan`
+### `echo "My SSN is 123-45-6789 and email john@example.com" | npx @authensor/cli aegis scan`
 ```
   Authensor Aegis — Content Scan
 
@@ -60,7 +60,7 @@ npx authensor aegis status
   "My SSN is [SSN_REDACTED] and email [EMAIL_REDACTED]"
 ```
 
-### `npx authensor-aegis scan --file suspicious-input.txt`
+### `npx @authensor/cli aegis scan --file suspicious-input.txt`
 ```
   Authensor Aegis — Content Scan
 
@@ -92,7 +92,7 @@ npx authensor aegis status
   Scan time: 3ms (4 detectors, 847 patterns)
 ```
 
-### `npx authensor-aegis rules list`
+### `npx @authensor/cli aegis rules list`
 ```
   Authensor Aegis — Detection Rules
 
@@ -113,10 +113,10 @@ npx authensor aegis status
 
   Last update check: 2026-03-14 00:10:00
   Subscription: Free (bundled rules only)
-  Upgrade: npx authensor aegis upgrade — $5/mo for weekly rule updates
+  Upgrade: npx @authensor/cli aegis upgrade — $5/mo for weekly rule updates
 ```
 
-### `npx authensor-aegis status`
+### `npx @authensor/cli aegis status`
 ```
   Authensor Aegis v0.0.1
 

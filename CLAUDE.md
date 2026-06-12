@@ -14,7 +14,7 @@ packages/
   mcp-server/       # MCP tools with policy enforcement
   sdk/              # TypeScript SDK for agent builders
   sdk-py/           # Python SDK
-  cli/              # CLI tool (npx authensor)
+  cli/              # CLI tool (npx @authensor/cli)
   aegis/            # Content safety scanner (zero dependencies)
   sentinel/         # Real-time monitoring engine (zero dependencies)
 adapters/

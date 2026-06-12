@@ -270,12 +270,12 @@ if (!check.intact) {
 # MCP Gateway -- online mode (with control plane)
 CONTROL_PLANE_URL=http://localhost:3000 \
 UPSTREAM_COMMAND="npx @modelcontextprotocol/server-filesystem /tmp" \
-npx authensor-mcp-gateway
+npx -p @authensor/mcp-server authensor-mcp-gateway
 
 # MCP Gateway -- offline mode (zero config, built-in policy)
 UPSTREAM_COMMAND="npx @modelcontextprotocol/server-filesystem /tmp" \
 AUTHENSOR_MODE=offline \
-npx authensor-mcp-gateway
+npx -p @authensor/mcp-server authensor-mcp-gateway
 ```
 
 ### Competitor Comparison
@@ -1083,7 +1083,7 @@ POST /evaluate
 # Offline MCP Gateway with built-in policy
 AUTHENSOR_MODE=offline \
 UPSTREAM_COMMAND="npx @modelcontextprotocol/server-filesystem /tmp" \
-npx authensor-mcp-gateway
+npx -p @authensor/mcp-server authensor-mcp-gateway
 ```
 
 Covers: ASI02 (basic RBAC), ASI03 (tool interception), ASI10 (fail-closed default).

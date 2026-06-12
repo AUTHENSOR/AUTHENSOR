@@ -310,8 +310,8 @@ const result = scanner.scan('Check my SSN: 123-45-6789');
 ### CLI
 
 ```bash
-npx authensor aegis scan "some text to check"
-npx authensor aegis status
+npx @authensor/cli aegis scan "some text to check"
+npx @authensor/cli aegis status
 ```
 
 ---

@@ -104,31 +104,31 @@
 
 ```bash
 # Everything through one CLI
-npx authensor                    # Interactive setup
-npx authensor up                 # Start control plane
-npx authensor status             # Check all services
+npx @authensor/cli                    # Interactive setup
+npx @authensor/cli up                 # Start control plane
+npx @authensor/cli status             # Check all services
 
 # SafeClaw (agent gating)
-npx authensor agent run "task"   # Run agent with safety
-npx authensor agent approvals    # Manage approvals
+npx @authensor/cli agent run "task"   # Run agent with safety
+npx @authensor/cli agent approvals    # Manage approvals
 
 # Aegis (content safety)
-npx authensor aegis scan "text"  # Scan content
-npx authensor aegis status       # Scanner status
-npx authensor aegis rules list   # View detection rules
+npx @authensor/cli aegis scan "text"  # Scan content
+npx @authensor/cli aegis status       # Scanner status
+npx @authensor/cli aegis rules list   # View detection rules
 
 # Sentinel (monitoring)
-npx authensor sentinel           # Start monitoring
-npx authensor sentinel tail      # Live feed
-npx authensor sentinel alerts    # View alerts
-npx authensor sentinel report    # Agent behavioral report
+npx @authensor/cli sentinel           # Start monitoring
+npx @authensor/cli sentinel tail      # Live feed
+npx @authensor/cli sentinel alerts    # View alerts
+npx @authensor/cli sentinel report    # Agent behavioral report
 
 # Policy management
-npx authensor templates          # List policy templates
-npx authensor apply standard     # Apply a template
+npx @authensor/cli templates          # List policy templates
+npx @authensor/cli apply standard     # Apply a template
 
 # Everything has --help
-npx authensor <command> --help
+npx @authensor/cli <command> --help
 ```
 
 ## Unified Dashboard

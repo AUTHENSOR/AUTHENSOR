@@ -7,22 +7,22 @@
 npm install @authensor/sentinel
 
 # Start monitoring (connects to control plane)
-npx authensor-sentinel --control-plane http://localhost:3000
+npx @authensor/cli sentinel --control-plane http://localhost:3000
 
 # Start with alert channels configured
-npx authensor-sentinel \
+npx @authensor/cli sentinel \
   --slack-webhook https://hooks.slack.com/services/T.../B.../xxx \
   --email alerts@company.com \
   --sms +1234567890
 
 # Check current status
-npx authensor-sentinel status
+npx @authensor/cli sentinel status
 
 # View live anomaly feed
-npx authensor-sentinel tail
+npx @authensor/cli sentinel tail
 
 # Configure alert rules
-npx authensor-sentinel rules add \
+npx @authensor/cli sentinel rules add \
   --name "High deny rate" \
   --metric deny_rate \
   --threshold 0.3 \
@@ -30,22 +30,22 @@ npx authensor-sentinel rules add \
   --severity critical
 
 # List active alerts
-npx authensor-sentinel alerts
+npx @authensor/cli sentinel alerts
 
 # Acknowledge an alert
-npx authensor-sentinel alerts ack ALT-001
+npx @authensor/cli sentinel alerts ack ALT-001
 
 # Show agent behavioral report
-npx authensor-sentinel report --agent test-agent --period 7d
+npx @authensor/cli sentinel report --agent test-agent --period 7d
 
 # Run as part of authensor CLI
-npx authensor sentinel        # starts monitoring
-npx authensor sentinel status # check status
+npx @authensor/cli sentinel        # starts monitoring
+npx @authensor/cli sentinel status # check status
 ```
 
 ## CLI Output Examples
 
-### `npx authensor-sentinel tail`
+### `npx @authensor/cli sentinel tail`
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  AUTHENSOR SENTINEL — Live Monitor                    00:14:32 │
@@ -69,7 +69,7 @@ npx authensor sentinel status # check status
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### `npx authensor-sentinel status`
+### `npx @authensor/cli sentinel status`
 ```
   Authensor Sentinel v0.0.1
 
@@ -93,7 +93,7 @@ npx authensor sentinel status # check status
   Rules: 5 active, 0 paused
 ```
 
-### `npx authensor-sentinel report --agent agent-alpha --period 24h`
+### `npx @authensor/cli sentinel report --agent agent-alpha --period 24h`
 ```
   Agent: agent-alpha — 24h Behavioral Report
 

@@ -61,8 +61,8 @@ If `outcome` is `"require_approval"` → wait. A human will approve or reject. P
 ### If you have access to npm / npx
 
 ```bash
-npx authensor          # Interactive setup
-npx authensor init     # Initialize in current project
+npx @authensor/cli          # Interactive setup
+npx @authensor/cli init     # Initialize in current project
 ```
 
 ### If you have access to MCP
@@ -187,7 +187,7 @@ cd authensor && docker compose up -d
 # Control plane at http://localhost:3000, admin key printed to stdout
 
 # Option 2: npx
-npx authensor
+npx @authensor/cli
 # Interactive wizard handles everything
 ```
 

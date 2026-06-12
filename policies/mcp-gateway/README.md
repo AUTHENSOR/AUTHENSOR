@@ -173,6 +173,6 @@ Deploy it by uploading it to the control plane and setting it as the active
 policy for your MCP gateway:
 
 ```bash
-npx authensor policies upload ./policies/mcp-gateway/policy.yaml
-npx authensor policies activate mcp-gateway-v1
+npx @authensor/cli policies upload ./policies/mcp-gateway/policy.yaml
+npx @authensor/cli policies activate mcp-gateway-v1
 ```

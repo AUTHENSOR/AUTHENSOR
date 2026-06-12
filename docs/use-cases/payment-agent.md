@@ -101,7 +101,7 @@ This directly satisfies PCI DSS audit requirements and SOX segregation-of-duties
 ## Quick Setup
 
 ```bash
-npx authensor                    # Interactive setup
+npx @authensor/cli                    # Interactive setup
 # Deploy the policy above via POST /policies
 # Integrate via SDK:
 ```

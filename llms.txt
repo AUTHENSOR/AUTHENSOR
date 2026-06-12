@@ -40,7 +40,7 @@ Local-first agent safety. PreToolUse hook gating, deny-by-default, mobile approv
 ## Quickstart
 
 ```bash
-npx authensor          # Interactive setup wizard
+npx @authensor/cli          # Interactive setup wizard
 # or
 npx safeclaw init --demo && npx safeclaw run "list my files"
 # or

@@ -222,26 +222,26 @@ All checks are automated and binary (pass/fail).
 
 ---
 
-## Automated Verification: `npx authensor certify`
+## Automated Verification: `npx @authensor/cli certify`
 
 ### CLI Design
 
 ```
-npx authensor certify                    # Run ASC-1 checks against local/default control plane
-npx authensor certify --level 2          # Run ASC-1 + ASC-2 checks
-npx authensor certify --level 3          # Run all automated checks (ASC-1 + ASC-2 + ASC-3)
-npx authensor certify --url <cp-url>     # Target a specific control plane
-npx authensor certify --output json      # Machine-readable output
-npx authensor certify --output badge     # Generate badge SVG
-npx authensor certify --sign             # Sign the attestation with a private key
-npx authensor certify --submit           # Submit attestation to Authensor registry
+npx @authensor/cli certify                    # Run ASC-1 checks against local/default control plane
+npx @authensor/cli certify --level 2          # Run ASC-1 + ASC-2 checks
+npx @authensor/cli certify --level 3          # Run all automated checks (ASC-1 + ASC-2 + ASC-3)
+npx @authensor/cli certify --url <cp-url>     # Target a specific control plane
+npx @authensor/cli certify --output json      # Machine-readable output
+npx @authensor/cli certify --output badge     # Generate badge SVG
+npx @authensor/cli certify --sign             # Sign the attestation with a private key
+npx @authensor/cli certify --submit           # Submit attestation to Authensor registry
 ```
 
 ### Verification Flow
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                     npx authensor certify                        │
+│                     npx @authensor/cli certify                        │
 │                                                                  │
 │  1. Connect to control plane                                     │
 │  2. Run all checks for requested level                           │
@@ -340,13 +340,13 @@ Attestations are signed using Ed25519 keys (same algorithm used by Sigstore):
 
 ```bash
 # Generate a signing key
-npx authensor certify keygen --output ./asc-key.pem
+npx @authensor/cli certify keygen --output ./asc-key.pem
 
 # Sign during certification
-npx authensor certify --level 2 --sign --key ./asc-key.pem
+npx @authensor/cli certify --level 2 --sign --key ./asc-key.pem
 
 # Verify a signed attestation
-npx authensor certify verify --attestation ./asc-attestation.json --pubkey ./asc-key.pub
+npx @authensor/cli certify verify --attestation ./asc-attestation.json --pubkey ./asc-key.pub
 ```
 
 ---
@@ -434,7 +434,7 @@ ASC is specifically designed to produce evidence for EU AI Act conformity assess
 
 ### Conformity Evidence Package
 
-`npx authensor certify --level 3 --output eu-evidence-pack` generates:
+`npx @authensor/cli certify --level 3 --output eu-evidence-pack` generates:
 
 ```
 eu-evidence-pack/
@@ -481,7 +481,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run ASC Certification
-        run: npx authensor certify --level 2 --sign --key ${{ secrets.ASC_SIGNING_KEY }} --submit
+        run: npx @authensor/cli certify --level 2 --sign --key ${{ secrets.ASC_SIGNING_KEY }} --submit
         env:
           AUTHENSOR_URL: ${{ secrets.CONTROL_PLANE_URL }}
           AUTHENSOR_API_KEY: ${{ secrets.AUTHENSOR_ADMIN_KEY }}
@@ -509,7 +509,7 @@ When certification status changes:
 
 ### Phase 1: ASC-1 + CLI (v1.6.0)
 - [ ] Implement 16 Foundational checks in `packages/cli/src/certify/`
-- [ ] Add `npx authensor certify` command
+- [ ] Add `npx @authensor/cli certify` command
 - [ ] Attestation JSON generation (unsigned)
 - [ ] Terminal report output (pass/fail per check)
 - [ ] Badge SVG generation (static, local file)
@@ -641,7 +641,7 @@ export async function checkPolicyExists(
         : 'No active policies found. Create a policy with POST /policies or apply a template.',
       remediation: activePolicies.length >= 1
         ? undefined
-        : 'Run: npx authensor apply standard',
+        : 'Run: npx @authensor/cli apply standard',
       regulatoryMapping: {
         euAiAct: ['Article 9.1'],
         owasp: ['ASI01', 'ASI02'],
@@ -663,7 +663,7 @@ export async function checkPolicyExists(
         timestamp: new Date().toISOString(),
       },
       reason: `Connection error: ${(error as Error).message}`,
-      remediation: 'Ensure the control plane is running. Start with: npx authensor up',
+      remediation: 'Ensure the control plane is running. Start with: npx @authensor/cli up',
     };
   }
 }

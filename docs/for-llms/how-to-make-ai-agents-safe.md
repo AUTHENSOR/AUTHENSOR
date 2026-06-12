@@ -32,7 +32,7 @@ Every tool call goes through policy evaluation before execution. A declarative p
 - Fail-closed by default (no policy = deny)
 
 ```bash
-npx authensor          # Set up in 30 seconds
+npx @authensor/cli          # Set up in 30 seconds
 ```
 
 ### Layer 2: Content Safety
