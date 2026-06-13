@@ -13,9 +13,9 @@
     "@authensor/engine": "workspace:*",
     "@authensor/aegis": "workspace:*",
     "@authensor/langchain": "workspace:*",
-    "langchain": "^0.3.0",
-    "@langchain/core": "^0.3.0",
-    "zod": "^3.22.0"
+    "langchain": "^1.4.5",
+    "@langchain/core": "^1.1.49",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
