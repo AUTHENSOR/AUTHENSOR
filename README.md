@@ -76,9 +76,29 @@ We open-source the defense because safety tooling shouldn't have a paywall. We s
 
 ## Try It in 30 Seconds
 
-The demo runs an agent that attempts destructive file operations, unauthorized API calls, and data exfiltration. Authensor catches each one through policy enforcement, content scanning, and approval workflows.
+The fastest way to protect an app is a local safety proxy, no code changes. Start Shield, then point your AI SDK at it:
 
-### One-Click Deploy
+```bash
+npx @authensor/shield
+```
+
+```bash
+ANTHROPIC_BASE_URL=http://localhost:8900/anthropic
+OPENAI_BASE_URL=http://localhost:8900/openai
+```
+
+Shield sits between your app and the provider on port 8900. Every request is scanned for prompt injection, credential leaks, and attack patterns; every response is scanned with Aegis (if installed) for indirect injection and exfiltration. Clean traffic passes through, threats are blocked. A visual dashboard runs at http://localhost:8901. See [packages/shield](packages/shield/README.md).
+
+### See the enforcement demo (local, offline)
+
+```bash
+npx @authensor/create-authensor my-agent
+cd my-agent && npm install && npm run demo
+```
+
+The demo runs an agent that attempts destructive file operations, unauthorized API calls, and data exfiltration; Authensor catches each one through policy enforcement, content scanning, and approval workflows. It is a local simulation that runs offline with no API keys. Shield (above) and the self-hosted control plane (below) are what protect real traffic.
+
+### Deploy the full server (a few minutes)
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/authensor)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
@@ -148,6 +168,7 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 
 | Tool | Description |
 |------|-------------|
+| [Shield](packages/shield/README.md) | Zero-config local safety proxy (`npx @authensor/shield`): scans requests and responses for injection, credential leaks, and exfiltration, no code changes |
 | [SafeClaw](https://github.com/authensor/safeclaw) | Local agent gating with PreToolUse hooks, mobile PWA dashboard, swipe-to-approve |
 | [ai-seclists](https://github.com/authensor/ai-seclists) | AI security payloads and wordlists: prompt injection, jailbreaks, model exploitation. The SecLists of AI |
 | [prompt-injection-benchmark](https://github.com/authensor/prompt-injection-benchmark) | Standardized benchmark for AI safety scanners: run your scanner, get a score |
@@ -155,7 +176,9 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 
 ## Quickstart
 
-### Self-hosted (recommended)
+For the fastest, no-code-change path, use Shield (see [Try It in 30 Seconds](#try-it-in-30-seconds)). The self-hosted control plane below is the advanced path for teams that want action-level governance: policy enforcement, receipts, approvals, and budgets threaded through the SDK.
+
+### Self-hosted control plane (team path)
 
 ```bash
 git clone https://github.com/authensor/authensor.git
@@ -165,7 +188,7 @@ docker compose up -d
 # Admin token printed to logs: docker compose logs control-plane
 ```
 
-That's it. Postgres starts, migrations run, a bootstrap admin key is created, and a default-safe policy (deny-by-default) is provisioned. Aegis content safety and Sentinel monitoring are enabled out of the box.
+Postgres starts, migrations run, a bootstrap admin key is created, and a default-safe policy (deny-by-default) is provisioned. Aegis content safety and Sentinel monitoring are enabled out of the box. From here, wrap agent actions with the SDK so each tool call goes through policy before execution.
 
 ### Add to any agent (TypeScript)
 
