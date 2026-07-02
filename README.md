@@ -47,7 +47,7 @@ cd my-agent && npm install && npm run demo
   </picture>
 </p>
 
-Every agent action (tool call, API request, file write, message send) is wrapped in an **action envelope** and evaluated through seven layers before execution. No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. Fail-closed by default.
+Every agent action (tool call, API request, file write, message send) is wrapped in an **action envelope** and evaluated through five layers before execution. No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. Fail-closed by default.
 
 ---
 
@@ -97,7 +97,7 @@ Everything below is open-source, self-hostable, MIT-licensed. No usage-based pri
 | **Approval Workflows** | Human-in-the-loop for high-consequence actions | Custom build ($50K+) |
 | **Cryptographic Audit Trail** | Hash-chained receipts, Sigstore transparency log integration | Custom build |
 | **MCP Tool Governance** | Policy enforcement for MCP server tool calls | Doesn't exist elsewhere |
-| **8 Framework Adapters** | LangChain, OpenAI, CrewAI, Vercel AI, Claude, vanilla TS/Python | Vendor-locked |
+| **5 Framework Adapters + TS/Python SDKs** | LangChain, OpenAI, CrewAI, Vercel AI, Claude, vanilla TS/Python | Vendor-locked |
 
 We open-source all of this because safety tooling shouldn't have a paywall. The more people who deploy proper agent governance, the safer the ecosystem gets for everyone.
 
@@ -139,7 +139,7 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 | `@authensor/openai` | OpenAI Agents SDK | Pre-execution guardrail |
 | `@authensor/vercel-ai-sdk` | Vercel AI SDK | Middleware integration |
 | `@authensor/claude-agent-sdk` | Claude Agent SDK | Tool-use guardrail |
-| `@authensor/crewai` | CrewAI | Task guardrail |
+| `authensor-crewai` (Python) | CrewAI | Task guardrail |
 | -- | Claude Code | Hooks-based PreToolUse / PostToolUse integration |
 | `@authensor/sdk` | TypeScript SDK | Direct integration for any TS agent |
 | `authensor` (Python) | Python SDK | Direct integration for any Python agent |
@@ -209,23 +209,27 @@ Drop-in integration for popular agent frameworks:
 
 ```typescript
 // LangChain / LangGraph
-import { AuthensorGuardrail } from '@authensor/langchain';
-const guardrail = new AuthensorGuardrail({ controlPlaneUrl: '...' });
+import { AuthensorGuard } from '@authensor/langchain';
+const guard = new AuthensorGuard({ controlPlaneUrl: '...' });
 
-// OpenAI Agents SDK
-import { AuthensorGuardrail } from '@authensor/openai';
-
-// CrewAI
-import { AuthensorGuardrail } from '@authensor/crewai';
+// OpenAI Agents SDK (factory, not a class)
+import { createAuthensorGuardrail } from '@authensor/openai';
+const guardrail = createAuthensorGuardrail({ controlPlaneUrl: '...' });
 
 // Vercel AI SDK
-import { AuthensorGuardrail } from '@authensor/vercel-ai-sdk';
+import { AuthensorVercelGuard } from '@authensor/vercel-ai-sdk';
 
 // Claude Agent SDK
-import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
+import { AuthensorClaudeGuard } from '@authensor/claude-agent-sdk';
 
 // Claude Code (hooks-based integration)
-// See docs/claude-code-hooks.md
+// See docs/integrations/claude-code.md
+```
+
+CrewAI ships as a Python package, `authensor-crewai`:
+
+```python
+from authensor_crewai import AuthensorGuard
 ```
 
 ## Why Authensor
@@ -236,7 +240,7 @@ import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
 
 3. **Research-validated.** 350+ verified vulnerabilities across 168+ repos. Two novel vulnerability classes. We broke PyTorch, DeepSpeed, BentoML, TorchServe, and the tools built to secure AI (NeMo Guardrails, PyRIT, Garak). When we test yours, we test at that depth.
 
-4. **Seven layers.** Aegis content scanning, session rules, policy engine, approval workflows, Sentinel behavioral monitoring, hash-chained receipts, TOCTOU protection.
+4. **Seven controls across five layers.** Aegis content scanning, session rules, policy engine, approval workflows, Sentinel behavioral monitoring, hash-chained receipts, TOCTOU protection.
 
 5. **Fail-closed.** No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied.
 
@@ -392,10 +396,10 @@ If you're conducting AI safety assessments (AIUC-1, EU AI Act conformity, NIST A
 | GET | `/receipts/:id/chain` | Get cross-agent receipt chain | admin |
 | GET | `/receipts/:id/transparency` | Get Sigstore transparency proof | admin |
 | POST | `/receipts/:id/claim` | Claim a receipt for execution | executor, admin |
-| POST | `/receipts/:id/finalize` | Finalize execution | executor, admin |
+| PATCH | `/receipts/:id` | Finalize execution (body: `{ claimId }`) | executor, admin |
 | GET | `/policies` | List policies | admin |
 | POST | `/policies` | Create a policy | admin |
-| POST | `/policies/:id/activate` | Activate a policy version | admin |
+| POST | `/policies/active` | Activate a policy version (body: `{ policy_id, version }`) | admin |
 | POST | `/approvals/:id/approve` | Approve a pending action | admin |
 | POST | `/approvals/:id/reject` | Reject a pending action | admin |
 | GET | `/budgets` | List budgets with utilization | admin |
@@ -482,7 +486,7 @@ pnpm install
 docker compose up -d    # Postgres + control plane
 pnpm dev                # Dev servers with hot reload
 
-# Test (1,148+ tests across 16 packages)
+# Test (1,148+ tests across all packages)
 pnpm test
 
 # Build all packages

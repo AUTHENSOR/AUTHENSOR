@@ -1219,8 +1219,8 @@ async function main(): Promise<void> {
 
   ${DIM}Modes:${RESET}
     (default)     Interactive wizard -- pick framework, get full scaffold
-    --stack       Quick-start with @authensor/stack (one package, all tools)
-    --tool NAME   Single tool (aegis, sentinel, engine, stack, mcp, redteam)
+    --stack       Quick-start with @authensor/engine + @authensor/aegis
+    --tool NAME   Single tool (aegis, sentinel, engine, mcp, redteam)
 
   ${DIM}The wizard asks 3 questions, then generates a fully working
   TypeScript agent with Authensor safety and the scary demo.${RESET}
@@ -1241,7 +1241,6 @@ async function main(): Promise<void> {
       aegis: { pkg: '@authensor/aegis', description: 'Content safety scanner' },
       sentinel: { pkg: '@authensor/sentinel', description: 'Behavioral monitor' },
       engine: { pkg: '@authensor/engine', description: 'Policy engine' },
-      stack: { pkg: '@authensor/stack', description: 'Full safety stack' },
       mcp: { pkg: '@authensor/mcp-server', description: 'MCP Gateway' },
       redteam: { pkg: '@authensor/redteam', description: 'Red team harness' },
     };
@@ -1285,7 +1284,8 @@ async function main(): Promise<void> {
         build: 'tsc',
       },
       dependencies: {
-        '@authensor/stack': 'latest',
+        '@authensor/engine': 'latest',
+        '@authensor/aegis': 'latest',
       },
       devDependencies: {
         typescript: '^5.3.0',
@@ -1294,25 +1294,49 @@ async function main(): Promise<void> {
       },
     }, null, 2) + '\n';
 
-    const stackMain = `import { AuthensorStack } from '@authensor/stack';
+    const stackMain = `import { PolicyEngine } from '@authensor/engine';
+import { AegisScanner } from '@authensor/aegis';
+import type { ActionEnvelope, Policy } from '@authensor/engine';
 
-const stack = AuthensorStack.create({
-  onAlert: (alert) => console.log('[ALERT]', alert.rule, alert.severity),
-  onAnomaly: (anomaly) => console.log('[ANOMALY]', anomaly.metric, anomaly.zscore),
-});
+const engine = new PolicyEngine();
+const aegis = new AegisScanner();
+
+// Fail-closed policy: allow reads, deny everything else by default.
+const policy: Policy = {
+  id: 'stack-policy',
+  name: 'Stack Policy',
+  version: '1.0.0',
+  enabled: true,
+  priority: 100,
+  rules: [
+    {
+      id: 'allow-file-read',
+      name: 'Allow File Reads',
+      effect: 'allow',
+      condition: {
+        all: [{ field: 'action.type', operator: 'eq', value: 'file.read' as unknown as Record<string, unknown> }],
+      },
+    },
+  ],
+  defaultEffect: 'deny',
+};
 
 // Content scanning
-const scan = stack.scan("user input goes here");
-console.log('Scan result:', scan.blocked ? 'BLOCKED' : 'CLEAN');
+const scan = aegis.scan('user input goes here', { mode: 'block' });
+console.log('Scan result:', scan.safe ? 'CLEAN' : 'BLOCKED');
 
-// Policy guard (scan + evaluate in one call)
-const { allowed, reason } = stack.guard(
-  'file.read',
-  '/workspace/config.json',
-  [],   // your policies here
-  { content: "user input" },
-);
-console.log('Guard:', allowed ? 'ALLOWED' : \`DENIED: \${reason}\`);
+// Policy evaluation
+const envelope: ActionEnvelope = {
+  id: 'env-001',
+  timestamp: new Date().toISOString(),
+  action: { type: 'file.read', resource: '/workspace/config.json', operation: 'read' },
+  principal: { type: 'agent', id: 'stack-agent', name: 'stack-agent' },
+  context: { environment: 'development' },
+};
+
+const result = engine.evaluate(envelope, [policy]);
+const { outcome, reason } = result.decision;
+console.log('Guard:', outcome === 'allow' ? 'ALLOWED' : \`\${outcome.toUpperCase()}: \${reason ?? ''}\`);
 `;
 
     write(dir, 'package.json', stackPkgJson);
@@ -1320,7 +1344,7 @@ console.log('Guard:', allowed ? 'ALLOWED' : \`DENIED: \${reason}\`);
     write(dir, 'src/index.ts', stackMain);
     write(dir, '.gitignore', genGitignore());
 
-    s.stop(`${GREEN}✓${RESET} Created ${projectName}/ with @authensor/stack`);
+    s.stop(`${GREEN}✓${RESET} Created ${projectName}/ with @authensor/engine + @authensor/aegis`);
 
     console.log(`\n  ${BOLD}Next steps:${RESET}`);
     console.log(`    cd ${projectName} && npm install`);

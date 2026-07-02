@@ -80,7 +80,7 @@ ask_yes() {
 # ── Install packages ──────────────────────────────────────────────
 install_cli() {
   info "Installing ${BOLD}authensor${RESET} CLI globally..."
-  npm install -g authensor || fail "npm install failed. If you see EACCES, see https://docs.npmjs.com/resolving-eacces-permissions-errors"
+  npm install -g @authensor/cli || fail "npm install failed. If you see EACCES, see https://docs.npmjs.com/resolving-eacces-permissions-errors"
   ok "authensor CLI installed"
 }
 
@@ -114,7 +114,7 @@ print_banner() {
 print_next_steps() {
   printf '\n%s── Next steps ─────────────────────────────────────%s\n' "$BOLD" "$RESET"
   printf '  1. %sauthensor init%s        Create a policy in the current project\n' "$GREEN" "$RESET"
-  printf '  2. %sauthensor dev%s         Start the local control plane\n' "$GREEN" "$RESET"
+  printf '  2. %sauthensor up%s          Start the local control plane\n' "$GREEN" "$RESET"
   printf '  3. %sauthensor status%s      Verify everything is running\n' "$GREEN" "$RESET"
   if [ "$INSTALL_SAFECLAW" = true ]; then
     printf '  4. %ssafeclaw%s              Launch the gated agent\n' "$GREEN" "$RESET"

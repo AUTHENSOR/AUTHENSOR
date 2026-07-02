@@ -69,7 +69,7 @@ async function main() {
     // Example 3: Handle a denied action
     console.log('🚫 Example 3: Handle denied actions\n');
     console.log('  (This would fail with restrictive policies)');
-    console.log('  In development mode, the default policy allows all actions.\n');
+    console.log('  In development the auto-provisioned default-safe policy allows reads, requires approval for writes/deletes/execute, and denies destructive actions (fail-closed).\n');
 
     // Example 4: List recent receipts
     console.log('📜 Example 4: List receipts\n');

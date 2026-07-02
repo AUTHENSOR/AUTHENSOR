@@ -64,7 +64,7 @@ async def main():
             # Example 3: Handle a denied action
             print("🚫 Example 3: Handle denied actions\n")
             print("  (This would fail with restrictive policies)")
-            print("  In development mode, the default policy allows all actions.\n")
+            print("  In development the auto-provisioned default-safe policy allows reads, requires approval for writes/deletes/execute, and denies destructive actions (fail-closed).\n")
 
             # Example 4: List recent receipts
             print("📜 Example 4: List receipts\n")
