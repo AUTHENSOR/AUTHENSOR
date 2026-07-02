@@ -377,20 +377,11 @@ const updateReceiptSchema = z.object({
       details: z.record(z.unknown()).optional(),
     }).optional(),
   }).optional(),
-  approval: z
-    .object({
-      status: z.enum(['pending', 'approved', 'rejected', 'expired']).optional(),
-      respondedAt: z.string().datetime().optional(),
-      respondedBy: z
-        .object({
-          type: z.string().optional(),
-          id: z.string().optional(),
-          name: z.string().optional(),
-        })
-        .optional(),
-      comment: z.string().optional(),
-    })
-    .optional(),
+  // Approval state is intentionally NOT settable here. A require_approval
+  // receipt can only be approved or rejected through the admin-only
+  // /approvals routes, which enforce role, quorum, and TOCTOU re-evaluation.
+  // Allowing approval.status on this executor-accessible route would let an
+  // executor self-approve its own gated action and defeat human-in-the-loop.
 });
 
 // Update receipt (e.g., mark as executed) - executor | admin
