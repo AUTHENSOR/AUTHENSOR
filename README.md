@@ -1,5 +1,8 @@
 <p align="center">
-  <img src=".github/assets/logo.svg" alt="Authensor" width="360">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
+    <img src=".github/assets/banner-light.svg" alt="Authensor" width="780">
+  </picture>
 </p>
 
 <p align="center">
@@ -8,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/authensor/authensor/actions"><img src="https://img.shields.io/badge/tests-1%2C148%2B%20passing-brightgreen.svg" alt="Tests: 1,148+ passing"></a>
-  <a href="https://www.npmjs.com/org/authensor"><img src="https://img.shields.io/badge/npm-%40authensor-red.svg" alt="npm: @authensor"></a>
-  <a href="docs/owasp-agentic-alignment.md"><img src="https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10-green.svg" alt="OWASP: 10/10 coverage"></a>
-  <a href="docs/eu-ai-act-compliance.md"><img src="https://img.shields.io/badge/EU_AI_Act-aligned-blue.svg" alt="EU AI Act aligned"></a>
-  <img src="https://img.shields.io/badge/zero_deps-core_packages-238636.svg" alt="Zero dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-722F37?style=flat-square&labelColor=1a1a1a" alt="License: MIT"></a>
+  <a href="https://github.com/authensor/authensor/actions"><img src="https://img.shields.io/badge/tests-1%2C148%2B%20passing-3D7A4E?style=flat-square&labelColor=1a1a1a" alt="Tests: 1,148+ passing"></a>
+  <a href="https://www.npmjs.com/org/authensor"><img src="https://img.shields.io/badge/npm-%40authensor-C9A227?style=flat-square&labelColor=1a1a1a" alt="npm: @authensor"></a>
+  <a href="docs/owasp-agentic-alignment.md"><img src="https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10-3D7A4E?style=flat-square&labelColor=1a1a1a" alt="OWASP: 10/10 coverage"></a>
+  <a href="docs/eu-ai-act-compliance.md"><img src="https://img.shields.io/badge/EU_AI_Act-aligned-722F37?style=flat-square&labelColor=1a1a1a" alt="EU AI Act aligned"></a>
+  <img src="https://img.shields.io/badge/zero_deps-core_packages-C9A227?style=flat-square&labelColor=1a1a1a" alt="Zero dependencies">
 </p>
 
 <br>
@@ -38,7 +41,10 @@ cd my-agent && npm install && npm run demo
 ## Architecture
 
 <p align="center">
-  <img src=".github/assets/architecture.svg" alt="Authensor Architecture" width="800">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/architecture-dark.svg">
+    <img src=".github/assets/architecture-light.svg" alt="Authensor architecture: every agent action flows through Aegis, Engine, Control Plane, and Sentinel to a verdict, with receipts, approvals, and the MCP gateway beneath" width="880">
+  </picture>
 </p>
 
 Every agent action (tool call, API request, file write, message send) is wrapped in an **action envelope** and evaluated through seven layers before execution. No policy loaded? Denied. Control plane unreachable? Denied. Unknown action type? Denied. Fail-closed by default.
@@ -113,7 +119,7 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 
 | Package | Description | Deps |
 |---------|-------------|------|
-| `@authensor/schemas` | JSON Schema definitions -- single source of truth | 0 |
+| `@authensor/schemas` | JSON Schema definitions, the single source of truth | 0 |
 | `@authensor/engine` | Pure policy evaluation (conditions, sessions, budgets, constraints) | 0 |
 | `@authensor/aegis` | Content safety scanner (injection, jailbreak, PII, memory poisoning, multimodal) | 0 |
 | `@authensor/sentinel` | Real-time monitoring (EWMA/CUSUM anomaly detection, chain tracking, alerts) | 0 |
@@ -143,9 +149,9 @@ We open-source all of this because safety tooling shouldn't have a paywall. The 
 | Tool | Description |
 |------|-------------|
 | [SafeClaw](https://github.com/authensor/safeclaw) | Local agent gating with PreToolUse hooks, mobile PWA dashboard, swipe-to-approve |
-| [ai-seclists](https://github.com/authensor/ai-seclists) | AI security payloads and wordlists -- prompt injection, jailbreaks, model exploitation. The SecLists of AI |
-| [prompt-injection-benchmark](https://github.com/authensor/prompt-injection-benchmark) | Standardized benchmark for AI safety scanners -- run your scanner, get a score |
-| [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) | Adversarial red-teaming for AI agents -- multi-step attack chains, MITRE ATLAS mapped, 15-dimension CBS scoring |
+| [ai-seclists](https://github.com/authensor/ai-seclists) | AI security payloads and wordlists: prompt injection, jailbreaks, model exploitation. The SecLists of AI |
+| [prompt-injection-benchmark](https://github.com/authensor/prompt-injection-benchmark) | Standardized benchmark for AI safety scanners: run your scanner, get a score |
+| [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) | Adversarial red-teaming for AI agents: multi-step attack chains, MITRE ATLAS mapped, 15-dimension CBS scoring |
 
 ## Quickstart
 
@@ -243,20 +249,20 @@ import { AuthensorGuardrail } from '@authensor/claude-agent-sdk';
 ### Content Safety (Aegis)
 
 Zero-dependency content scanner that runs *before* policy evaluation:
-- **Prompt injection detection** -- 15+ heuristic rules
-- **Jailbreak detection** -- pattern matching for common bypass techniques
-- **PII detection** -- emails, SSNs, credit cards, phone numbers
-- **Memory poisoning detection** -- 22 MINJA-informed rules for persistent memory attacks
-- **Multimodal safety** -- 6 heuristic categories for image/file content
-- **Output scanning** -- post-execution content validation
+- **Prompt injection detection**: 15+ heuristic rules
+- **Jailbreak detection**: pattern matching for common bypass techniques
+- **PII detection**: emails, SSNs, credit cards, phone numbers
+- **Memory poisoning detection**: 22 MINJA-informed rules for persistent memory attacks
+- **Multimodal safety**: 6 heuristic categories for image/file content
+- **Output scanning**: post-execution content validation
 
 ### Session Rules
 
 Detect privilege escalation through multi-action patterns:
-- **Forbidden sequences** -- block `[auth.login, admin.escalate]` chains with glob matching
-- **Risk scoring** -- cumulative per-session risk with configurable weights
-- **Max actions** -- cap total actions per session
-- **Lookback windows** -- configurable history depth for sequence matching
+- **Forbidden sequences**: block `[auth.login, admin.escalate]` chains with glob matching
+- **Risk scoring**: cumulative per-session risk with configurable weights
+- **Max actions**: cap total actions per session
+- **Lookback windows**: configurable history depth for sequence matching
 
 ### Budget Enforcement
 
@@ -272,7 +278,7 @@ Zero-dependency anomaly detection engine:
 - **Per-agent baselines** via EWMA (Exponentially Weighted Moving Average)
 - **CUSUM change detection** for gradual behavioral drift
 - **Configurable alerts** on deny rate, latency, cost, chain depth, and fan-out
-- **Cross-agent chain tracking** -- depth and fan-out metrics for delegation chains
+- **Cross-agent chain tracking**: depth and fan-out metrics for delegation chains
 
 ### Shadow/Canary Policy Testing
 
@@ -283,12 +289,12 @@ Test new policies alongside active ones without enforcement:
 
 ### Transparency & Compliance
 
-- **Hash-chained receipts** -- SHA-256 chain makes audit trail tamper-evident
-- **Sigstore/Rekor integration** -- optional publishing to public transparency log
-- **Cross-agent tracing** -- `parentReceiptId` links receipts across delegation chains
-- **TOCTOU protection** -- re-evaluates policy on claim to prevent stale-approval attacks
-- **Principal binding** -- bind API keys to specific agent identities
-- **OpenTelemetry** -- spans and metrics for every evaluation
+- **Hash-chained receipts**: SHA-256 chain makes audit trail tamper-evident
+- **Sigstore/Rekor integration**: optional publishing to public transparency log
+- **Cross-agent tracing**: `parentReceiptId` links receipts across delegation chains
+- **TOCTOU protection**: re-evaluates policy on claim to prevent stale-approval attacks
+- **Principal binding**: bind API keys to specific agent identities
+- **OpenTelemetry**: spans and metrics for every evaluation
 
 ## OWASP Agentic Top 10 Coverage
 
@@ -359,10 +365,10 @@ CVE-quality output
 
 [Chainbreaker](https://github.com/chainbreaker-ai/chainbreaker) is the engine. It generates and executes multi-step attack chains using:
 
-- **MITRE ATLAS mapping** -- every attack chain maps to documented tactics and techniques
-- **15-dimension Chainbreaker Behavioral Score (CBS)** -- quantitative safety rating, not vibes
-- **Automated at scale** -- thousands of attack variations, not a handful of manual tests
-- **Rust core** -- fast, auditable, zero runtime dependencies
+- **MITRE ATLAS mapping**: every attack chain maps to documented tactics and techniques
+- **15-dimension Chainbreaker Behavioral Score (CBS)**: quantitative safety rating, not vibes
+- **Automated at scale**: thousands of attack variations, not a handful of manual tests
+- **Rust core**: fast, auditable, zero runtime dependencies
 
 Findings feed back into Authensor's defense layer: new Aegis detection rules, policy templates, Sentinel behavioral signatures. The loop closes.
 
@@ -494,4 +500,4 @@ Authensor is built on the belief that **safety tooling should not have a paywall
 
 ## License
 
-MIT -- use it however you want.
+MIT. Use it however you want.
