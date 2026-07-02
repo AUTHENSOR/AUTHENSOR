@@ -52,4 +52,21 @@ describe('PolicyEngine', () => {
     const result = engine.evaluate(envelope, policies);
     expect(result.decision.outcome).toBe('allow');
   });
+
+  it('records require_approval in matchedRules as deny (schema-valid), not allow', () => {
+    const policies: Policy[] = [
+      {
+        id: 'approval',
+        name: 'Needs approval',
+        version: '1.0.0',
+        rules: [{ id: 'approve', effect: 'require_approval' }],
+      },
+    ];
+    const engine = new PolicyEngine();
+    const result = engine.evaluate(envelope, policies);
+    // Top-level outcome preserves the true effect.
+    expect(result.decision.outcome).toBe('require_approval');
+    // Audit label is coerced to the deny pole (enum is allow|deny), never allow.
+    expect(result.decision.matchedRules?.[0]?.effect).toBe('deny');
+  });
 });

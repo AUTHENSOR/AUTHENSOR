@@ -118,7 +118,10 @@ function isBootstrapSafeEndpoint(c: Context): boolean {
     const bootstrapToken = process.env.AUTHENSOR_BOOTSTRAP_ADMIN_TOKEN;
     if (bootstrapToken) {
       const providedToken = extractToken(c);
-      return providedToken === bootstrapToken;
+      if (!providedToken) return false;
+      // Constant-time compare to avoid leaking a timing oracle on the bootstrap token.
+      // Hashing both sides yields equal-length hex digests so timingSafeEqual is used.
+      return constantTimeCompare(hashToken(providedToken), hashToken(bootstrapToken));
     }
   }
 

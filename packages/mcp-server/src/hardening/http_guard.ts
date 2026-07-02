@@ -16,13 +16,28 @@ export interface GuardResult {
   resolvedIps: string[];
 }
 
+const BLOCKED_RANGES = new Set([
+  'unspecified',
+  'loopback',
+  'linkLocal',
+  'private',
+  'multicast',
+  'uniqueLocal',
+  'carrierGradeNat',
+  'reserved',
+  'broadcast',
+]);
+
 function isBlockedIp(ip: string): boolean {
   try {
-    const parsed = ipaddr.parse(ip);
-    if (parsed.range() === 'loopback') return true;
-    if (parsed.range() === 'linkLocal') return true;
-    if (parsed.range() === 'private') return true;
-    if (parsed.range() === 'multicast') return true;
+    let parsed = ipaddr.parse(ip);
+    // Normalize IPv4-mapped IPv6 (::ffff:a.b.c.d) so a mapped internal
+    // address is checked against the v4 ranges, not left as an unblocked
+    // 'ipv4Mapped'. Only convert when it is actually a mapped address.
+    if (parsed.kind() === 'ipv6' && (parsed as ipaddr.IPv6).isIPv4MappedAddress()) {
+      parsed = (parsed as ipaddr.IPv6).toIPv4Address();
+    }
+    if (BLOCKED_RANGES.has(parsed.range())) return true;
     if (parsed.kind() === 'ipv4' && parsed.toString() === '0.0.0.0') return true;
     return false;
   } catch {

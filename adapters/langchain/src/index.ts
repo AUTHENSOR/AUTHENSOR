@@ -83,9 +83,9 @@ export class AuthensorGuard {
       decision: { outcome: string; reason?: string };
     };
 
-    if (result.decision.outcome === 'deny' || result.decision.outcome === 'rate_limited') {
+    if (result.decision.outcome !== 'allow') {
       throw new Error(
-        `Action denied by Authensor: ${result.decision.reason || result.decision.outcome}`
+        `Action denied by Authensor (${result.decision.outcome}): ${result.decision.reason || result.decision.outcome}`
       );
     }
 

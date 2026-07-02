@@ -21,6 +21,11 @@ export function evaluateCondition(
   }
   // Handle logical operators
   if (condition.all) {
+    // An explicitly-empty `all: []` must fail closed rather than being
+    // vacuously true via Array.prototype.every.
+    if (condition.all.length === 0) {
+      return false;
+    }
     return condition.all.every((c) => evaluateCondition(c, envelope));
   }
 

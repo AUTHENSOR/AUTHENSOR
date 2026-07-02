@@ -72,8 +72,35 @@ type ReceiptRow = {
 };
 
 /**
- * Compute a SHA-256 hash of a receipt's core immutable fields.
- * This hash is stored with the receipt and used to verify chain integrity.
+ * Deterministically serialize a value with recursively sorted object keys.
+ * Ensures the receipt hash is stable regardless of key insertion order
+ * (including the order the database returns jsonb columns in).
+ */
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (value && typeof value === 'object') {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
+
+/**
+ * Compute a hash of a receipt's substantive immutable fields.
+ *
+ * Binds the full create-time-immutable content (envelope, decision, and the
+ * derived outcome/approval status) into the hash so tampering with any of them
+ * is detectable. execution/result/error are written after creation and are not
+ * covered here (see verifyReceiptChain for the same field set).
+ *
+ * By default this is an unkeyed SHA-256 (the behavior the docker path relies
+ * on). If AUTHENSOR_RECEIPT_HASH_KEY is set, an HMAC-SHA256 keyed with that
+ * secret is used instead, so a DB-level attacker cannot recompute the chain.
  */
 function computeReceiptHash(fields: {
   id: string;
@@ -81,14 +108,27 @@ function computeReceiptHash(fields: {
   timestamp: string;
   decisionOutcome: string;
   prevReceiptHash: string | null;
+  envelope: unknown;
+  decision: unknown;
+  approvalStatus: string | null;
 }): string {
-  const payload = JSON.stringify({
-    id: fields.id,
-    envelopeId: fields.envelopeId,
-    timestamp: fields.timestamp,
-    decisionOutcome: fields.decisionOutcome,
-    prevReceiptHash: fields.prevReceiptHash ?? '',
-  });
+  const payload = JSON.stringify(
+    canonicalize({
+      id: fields.id,
+      envelopeId: fields.envelopeId,
+      timestamp: fields.timestamp,
+      decisionOutcome: fields.decisionOutcome,
+      prevReceiptHash: fields.prevReceiptHash ?? '',
+      envelope: fields.envelope ?? null,
+      decision: fields.decision ?? null,
+      approvalStatus: fields.approvalStatus ?? '',
+    })
+  );
+
+  const key = process.env.AUTHENSOR_RECEIPT_HASH_KEY;
+  if (key) {
+    return crypto.createHmac('sha256', key).update(payload).digest('hex');
+  }
   return crypto.createHash('sha256').update(payload).digest('hex');
 }
 
@@ -174,20 +214,13 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
   // Cross-agent chain: extract parent receipt ID from envelope context
   const parentReceiptId = (input.envelope.context as any)?.parentReceiptId ?? null;
 
-  // Hash chain: link this receipt to the previous one
+  // Hash chain: link this receipt to the previous one.
   const prevHash = await getLatestReceiptHash();
   const now = new Date().toISOString();
-  const receiptHash = computeReceiptHash({
-    id,
-    envelopeId: input.envelopeId,
-    timestamp: now,
-    decisionOutcome: input.decision.outcome,
-    prevReceiptHash: prevHash,
-  });
 
-  const { rows } = await db.query<ReceiptRow>(
-    `INSERT INTO receipts (id, envelope_id, parent_receipt_id, status, decision_outcome, tool_name, actor_id, envelope, decision, approval, approval_status, execution_attempts, receipt_hash, prev_receipt_hash, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11, 0, $12, $13, $14, $14)
+  const { rows: inserted } = await db.query<ReceiptRow>(
+    `INSERT INTO receipts (id, envelope_id, parent_receipt_id, status, decision_outcome, tool_name, actor_id, envelope, decision, approval, approval_status, execution_attempts, prev_receipt_hash, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11, 0, $12, $13, $13)
      RETURNING *`,
     [
       id,
@@ -201,10 +234,30 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
       input.decision,
       approval ?? null,
       approvalStatus,
-      receiptHash,
       prevHash,
       now,
     ]
+  );
+
+  // Compute the hash over the persisted (DB round-tripped) content so that
+  // verifyReceiptChain, which reads the same columns back, recomputes an
+  // identical hash. Then store it. This binds envelope + decision + approval
+  // status into the hash, not just the decision outcome.
+  const insertedRow = inserted[0];
+  const receiptHash = computeReceiptHash({
+    id: insertedRow.id,
+    envelopeId: insertedRow.envelope_id,
+    timestamp: insertedRow.created_at,
+    decisionOutcome: insertedRow.decision_outcome,
+    prevReceiptHash: insertedRow.prev_receipt_hash,
+    envelope: insertedRow.envelope,
+    decision: insertedRow.decision,
+    approvalStatus: insertedRow.approval_status,
+  });
+
+  const { rows } = await db.query<ReceiptRow>(
+    `UPDATE receipts SET receipt_hash = $2 WHERE id = $1 RETURNING *`,
+    [id, receiptHash]
   );
 
   const receipt = mapRow(rows[0]);
@@ -480,6 +533,9 @@ export async function verifyReceiptChain(options?: {
       timestamp: row.created_at,
       decisionOutcome: row.decision_outcome,
       prevReceiptHash: row.prev_receipt_hash,
+      envelope: row.envelope,
+      decision: row.decision,
+      approvalStatus: row.approval_status,
     });
 
     if (expectedHash !== row.receipt_hash) {

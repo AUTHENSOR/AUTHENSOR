@@ -59,4 +59,11 @@ describe('condition evaluator', () => {
       )
     ).toBe(true);
   });
+
+  it('fails closed on an explicitly-empty all group', () => {
+    // An empty `all: []` must not be vacuously true (Array.every default).
+    expect(evaluateCondition({ all: [] }, baseEnvelope)).toBe(false);
+    // `any: []` already fails closed; keep it that way.
+    expect(evaluateCondition({ any: [] }, baseEnvelope)).toBe(false);
+  });
 });

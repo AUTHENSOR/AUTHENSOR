@@ -10,7 +10,12 @@ import { listTemplates, getTemplate } from '../services/policy-templates.js';
 import { createPolicy, setActivePolicy } from '../services/policy-service.js';
 import { requireRole } from '../auth/middleware.js';
 
+// Public discovery endpoints (GET). Mounted BEFORE authMiddleware.
 export const templatesRoute = new Hono();
+
+// Protected endpoint (POST /:id/apply). Mounted AFTER authMiddleware so
+// requireRole(['admin']) receives the auth context. See app.ts.
+export const templatesApplyRoute = new Hono();
 
 /**
  * GET /templates
@@ -54,7 +59,7 @@ templatesRoute.get('/:id', (c) => {
  *   x-authensor-org  — org id (defaults to 'default')
  *   x-authensor-env  — environment (defaults to 'dev')
  */
-templatesRoute.post('/:id/apply', requireRole(['admin']), async (c) => {
+templatesApplyRoute.post('/:id/apply', requireRole(['admin']), async (c) => {
   const id = c.req.param('id');
   const template = getTemplate(id);
 

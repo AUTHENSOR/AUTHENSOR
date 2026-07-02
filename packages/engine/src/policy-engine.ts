@@ -92,7 +92,7 @@ export class PolicyEngine {
               policyId: policy.id,
               policyVersion: policy.version,
               reason: rule.description,
-              matchedRules: [{ ruleId: rule.id, ruleName: rule.name, effect: rule.effect === 'require_approval' ? 'allow' : rule.effect }],
+              matchedRules: [{ ruleId: rule.id, ruleName: rule.name, effect: rule.effect === 'require_approval' ? 'deny' : rule.effect }],
             }),
             matchedPolicy: policy,
             matchedRule: rule,

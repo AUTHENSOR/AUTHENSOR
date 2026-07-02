@@ -212,8 +212,8 @@ export const PII_RULES: DetectorRule[] = [
     id: 'pii-aadhaar',
     type: 'pii',
     subType: 'AADHAAR',
-    // 12-digit number, spaces or hyphens allowed, first digit not 0 or 1
-    pattern: /\b[2-9]\d{3}[\s\-]?\d{4}[\s\-]?\d{4}\b/,
+    // 12-digit number, spaces or hyphens allowed, first digit not 0 or 1; requires Aadhaar/UID label to avoid firing on ordinary 12-digit groups
+    pattern: /\b(?:aadhaar|aadhar|uid(?:ai)?)\s*(?:no\.?|number|#)?\s*[:\-]?\s*[2-9]\d{3}[\s\-]?\d{4}[\s\-]?\d{4}\b/i,
     confidence: 0.72,
     description: 'Indian Aadhaar number (12-digit UID)',
   },
@@ -245,8 +245,8 @@ export const PII_RULES: DetectorRule[] = [
     id: 'pii-swift-bic',
     type: 'pii',
     subType: 'SWIFT_BIC',
-    // 8 or 11 chars: 4 bank + 2 country + 2 location + optional 3 branch
-    pattern: /\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/,
+    // 8 or 11 chars: 4 bank + 2 country + 2 location + optional 3 branch; requires SWIFT/BIC label to avoid firing on ordinary 8-letter uppercase words
+    pattern: /\b(?:swift|bic|iban|routing)\s*(?:code|no\.?|number)?\s*[:\-]?\s*[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/i,
     confidence: 0.72,
     description: 'SWIFT/BIC code',
   },

@@ -266,7 +266,11 @@ export function checkAttachment(
             svgContent = parsed.data;
           }
         } else {
-          svgContent = decodeURIComponent(parsed.data);
+          try {
+            svgContent = decodeURIComponent(parsed.data);
+          } catch {
+            svgContent = parsed.data;
+          }
         }
         detections.push(...checkSvgContent(svgContent, index));
       }

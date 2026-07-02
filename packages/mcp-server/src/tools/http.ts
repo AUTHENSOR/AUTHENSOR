@@ -91,6 +91,22 @@ export async function executeHttpTool(
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         try {
+          // DNS-rebinding mitigation. validateHttpTarget above resolved and
+          // checked the destination IPs, but fetch() below re-resolves the
+          // hostname, so a rebind between the two resolutions could point the
+          // actual connection at an internal address. True IP pinning here
+          // would require an undici dispatcher with a custom lookup (to connect
+          // to a pre-validated IP while preserving the Host/SNI hostname);
+          // undici is not a dependency of this package, so pinning cannot be
+          // done cleanly within these files. As the documented fallback we
+          // re-validate immediately before connecting, which shrinks the TOCTOU
+          // window but does not close it (fetch still performs its own final
+          // resolution). Residual risk: a rebind landing between this check and
+          // fetch's internal lookup. Closing it fully needs a pinned dispatcher.
+          await validateHttpTarget(url, {
+            allowHttp: process.env.AUTHENSOR_ALLOW_HTTP === 'true',
+          });
+
           const response = await fetch(url, {
             method,
             headers,

@@ -12,7 +12,7 @@ import { evaluateRoute } from './routes/evaluate.js';
 import { receiptsRoute } from './routes/receipts.js';
 import { policiesRoute } from './routes/policies.js';
 import { healthRoute } from './routes/health.js';
-import { templatesRoute } from './routes/templates.js';
+import { templatesRoute, templatesApplyRoute } from './routes/templates.js';
 import { DEFAULT_SAFE_POLICY } from './services/default-policies.js';
 import { approvalsRoute } from './routes/approvals.js';
 import { claimsRoute } from './routes/claims.js';
@@ -50,11 +50,15 @@ export function createApp() {
   // Public stats: anonymous aggregate counters (before auth middleware)
   app.route('/stats', statsRoute);
 
-  // Policy templates: GET endpoints are public discovery, POST /apply requires admin
+  // Policy templates: GET endpoints are public discovery (before auth)
   app.route('/templates', templatesRoute);
 
   // Authentication middleware (applied to all protected routes)
   app.use('*', authMiddleware);
+
+  // Policy templates: POST /:id/apply requires admin (mounted after auth so
+  // requireRole receives auth context)
+  app.route('/templates', templatesApplyRoute);
 
   // Rate limiting (after auth, so we have auth context)
   app.use('*', rateLimitMiddleware);
