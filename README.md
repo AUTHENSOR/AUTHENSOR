@@ -33,8 +33,28 @@ cd my-agent && npm install && npm run demo
   <a href="#packages">Packages</a> &middot;
   <a href="#owasp-agentic-top-10-coverage">OWASP</a> &middot;
   <a href="#compliance">Compliance</a> &middot;
-  <a href="#adversarial-red-teaming">Red Teaming</a>
+  <a href="#adversarial-red-teaming">Red Teaming</a> &middot;
+  <a href="#research">Research</a> &middot;
+  <a href="#work-with-us">Work With Us</a>
 </p>
+
+---
+
+## Research
+
+Authensor audits the infrastructure the AI safety field uses to measure itself, and files every finding upstream in public.
+
+- **99 defect reports** across **46 organizations** in evaluation, guardrail, and training infrastructure
+- **16 landed fixes**, including **7 in UK AI Security Institute repos** (`inspect_ai`, `inspect_evals`, `inspect_cyber`, `control-arena`), plus Meridian Labs, Databricks, NVIDIA and Presidio
+- **76 of those defects are a single class**: the evaluator trusts an artifact the evaluated system controls
+
+The stack below is hardened against what that audit found.
+
+## Work With Us
+
+Red-team engagements, evaluator and scorer audits, and adversarial testing for teams shipping AI agents.
+
+[authensor.com](https://www.authensor.com) &middot; john@authensor.com
 
 ---
 
