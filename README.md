@@ -6,79 +6,47 @@
 </p>
 
 <p align="center">
-  <strong>Open-source safety stack for AI agents.</strong><br>
-  <em>Gate every tool call. Scan every input. Monitor every session. Audit everything.</em>
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-722F37?style=flat-square&labelColor=1a1a1a" alt="License: MIT"></a>
-  <a href="https://github.com/authensor/authensor/actions"><img src="https://img.shields.io/badge/tests-1%2C148%2B%20passing-3D7A4E?style=flat-square&labelColor=1a1a1a" alt="Tests: 1,148+ passing"></a>
-  <a href="https://www.npmjs.com/org/authensor"><img src="https://img.shields.io/badge/npm-%40authensor-C9A227?style=flat-square&labelColor=1a1a1a" alt="npm: @authensor"></a>
-  <a href="docs/owasp-agentic-alignment.md"><img src="https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10-3D7A4E?style=flat-square&labelColor=1a1a1a" alt="OWASP: 10/10 coverage"></a>
-  <a href="docs/eu-ai-act-compliance.md"><img src="https://img.shields.io/badge/EU_AI_Act-aligned-722F37?style=flat-square&labelColor=1a1a1a" alt="EU AI Act aligned"></a>
-  <img src="https://img.shields.io/badge/zero_deps-core_packages-C9A227?style=flat-square&labelColor=1a1a1a" alt="Zero dependencies">
-</p>
-
-<br>
-
-```bash
-npx @authensor/create-authensor my-agent
-cd my-agent && npm install && npm run demo
-```
-
-<p align="center">
-  <a href="docs/quickstart.md">Quickstart</a> &middot;
-  <a href="docs/packages.md">Packages</a> &middot;
-  <a href="docs/architecture.md">Architecture</a> &middot;
-  <a href="docs/why.md">Why Authensor</a> &middot;
-  <a href="docs/red-teaming.md">Red Teaming</a> &middot;
-  <a href="#research">Research</a> &middot;
-  <a href="#work-with-us">Work With Us</a>
+  <strong>AI evaluation integrity.</strong><br>
+  <em>We break the benchmarks, judges and scoring pipelines AI is measured with, and attest the ones that hold.</em>
 </p>
 
 ---
 
+Authensor is a security research firm in San Francisco, founded by [John Daniel Kearney](https://johndanielkearney.com). It audits the instruments the AI industry measures itself with: evaluation harnesses, benchmarks, LLM judges, leaderboards and scoring pipelines.
+
+Every defect we report is proven with a running reproduction against the genuine code at a pinned commit, and disclosed to the maintainer first. Fixed-scope audits end in an attestation with a scope, a standard version and an expiry date.
+
 ## Research
 
-Authensor audits the infrastructure the AI safety field uses to measure itself, and files every finding upstream in public.
+- **[The Evaluator Trust Boundary](https://www.authensor.com/etb)** (ETB-01 to ETB-10). An evaluator has an ETB failure when its score depends on an artifact the evaluated system can influence. The page lists dated cases with upstream fixes in SWE-bench, Promptfoo, NVIDIA garak and the UK AI Security Institute's Inspect and ControlArena. Preprint: [10.5281/zenodo.21633620](https://doi.org/10.5281/zenodo.21633620).
+- **[etb-scan](https://github.com/AUTHENSOR/etb-scan)**, an offline scanner that measures ETB-01 (injected verdicts) against your own judge. Standard library only, no API keys, MIT.
 
-- **99 defect reports** across **46 organizations** in evaluation, guardrail, and training infrastructure
-- **16 landed fixes**, including **7 in UK AI Security Institute repos** (`inspect_ai`, `inspect_evals`, `inspect_cyber`, `control-arena`), plus Meridian Labs, Databricks, NVIDIA and Presidio
-- **76 of those defects are a single class**: the evaluator trusts an artifact the evaluated system controls
+```bash
+pip install etb-scan
+etbscan --judge mypkg:judge --trials 10
+```
 
-The stack is hardened against what that audit found.
+- **[The ledger](https://www.authensor.com/ledger)**: every defect filed, every fix that landed upstream, and every target read and found sound. Includes the MLflow CVE-2026-64849 credit.
 
-## Work With Us
+## Work with us
 
-Red-team engagements, evaluator and scorer audits, and adversarial testing for teams shipping AI agents.
+Evaluation-integrity audits, and a free claim check: one published number checked against the instrument that produced it, within 48 hours.
 
 [authensor.com](https://www.authensor.com) &middot; john@authensor.com
 
 ---
 
-## Documentation
+## The retired agent-safety toolkit
 
-| | |
-|---|---|
-| [Architecture](docs/architecture.md) | How the pieces fit: engine, control plane, scanners, receipts |
-| [Packages](docs/packages.md) | All 18 packages, framework adapters, companion tools |
-| [Quickstart](docs/quickstart.md) | Self-hosted setup, TypeScript and Python integration, framework adapters, CLI |
-| [Why Authensor](docs/why.md) | The problem, the five layers, why the stack is free |
-| [Features](docs/features.md) | Aegis content safety, session rules, budgets, Sentinel monitoring, shadow policies |
-| [Red teaming](docs/red-teaming.md) | The adversarial harness, what gets tested, how it runs |
-| [API reference](docs/api.md) | Control-plane endpoints |
-| [Deployment](docs/deployment.md) | Self-hosted vs hosted, production deployment |
-| [Development](docs/development.md) | Building and testing the monorepo |
-| [OWASP Agentic Top 10](docs/owasp-agentic-alignment.md) | Coverage mapping, 10/10 |
-| [EU AI Act](docs/eu-ai-act-compliance.md) | Article-by-article alignment |
+This repository first held Authensor's open-source agent-safety toolkit: the policy engine, the Aegis content scanner, the Sentinel monitor, SafeClaw and the `@authensor` npm packages. That product line is retired and no longer maintained. Its code and documentation stay here for reference:
 
-
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-Authensor is built on the belief that **safety tooling should not have a paywall**. We open-source every line of safety code because the more people who use these tools, the safer agents get for everyone.
+[Quickstart](docs/quickstart.md) &middot;
+[Features](docs/features.md) &middot;
+[Red teaming](docs/red-teaming.md) &middot;
+[API reference](docs/api.md) &middot;
+[Deployment](docs/deployment.md) &middot;
+[Development](docs/development.md)
 
 ## License
 
-MIT. Use it however you want.
+MIT.
