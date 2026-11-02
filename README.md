@@ -12,7 +12,7 @@
 
 ---
 
-Authensor is a security research firm in San Francisco, founded by [John Daniel Kearney](https://johndanielkearney.com). It audits the instruments the AI industry measures itself with: evaluation harnesses, benchmarks, LLM judges, leaderboards and scoring pipelines.
+Authensor is a security research firm in San Francisco, founded by [John Daniel Kearney](https://johndanielkearney.com). Most repositories on this profile are forks kept for upstream pull requests; the work lives in [etb-scan](https://github.com/AUTHENSOR/etb-scan), [etb-harness](https://github.com/AUTHENSOR/etb-harness) and the repositories listed below. It audits the instruments the AI industry measures itself with: evaluation harnesses, benchmarks, LLM judges, leaderboards and scoring pipelines.
 
 Every defect we report is proven with a running reproduction against the genuine code at a pinned commit, and disclosed to the maintainer first. Fixed-scope audits end in an attestation with a scope, a standard version and an expiry date.
 
@@ -25,6 +25,9 @@ Every defect we report is proven with a running reproduction against the genuine
 pip install etb-scan
 etbscan --judge mypkg:judge --trials 10
 ```
+
+- **[etb-harness](https://github.com/AUTHENSOR/etb-harness)**, which measures how gameable an agent benchmark is before and after hardening: deterministic capability probes (can the agent read the tests, reach the fix commit, forge a pass), opt-in LLM attacker policies, a verifier and hardening profiles. First targets: SWE-bench Verified, ControlArena. Apache-2.0. Results are published only after the maintainers have been notified.
+- **The ETB registry**, one OSV-format record per confirmed evaluation-integrity flaw (`ETB-YYYY-NNNN`), with the disclosure policy and the full taxonomy (ETB-01 to ETB-10 published, ETB-11 to ETB-16 proposed). Opens with the first published entries.
 
 - **[The ledger](https://www.authensor.com/ledger)**: every defect filed, every fix that landed upstream, and every target read and found sound. Includes the MLflow CVE-2026-64849 credit.
 
